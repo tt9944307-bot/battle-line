@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>バトルライン</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: linear-gradient(160deg, #1a4a2a 0%, #0d2d18 100%);
+  font-family: 'Segoe UI', Arial, sans-serif;
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  gap: 6px;
+  user-select: none;
+}
+
+h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0.6); margin-top: 2px; }
+
+/* ===== SCREENS ===== */
+.screen { width: 100%; max-width: 840px; }
+
+/* Menu */
+#scr-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 16px;
+}
+
+#scr-menu h1 { font-size: 2em; margin-bottom: 20px; }
+
+.btn-big {
+  background: rgba(255,255,255,0.12);
+  border: 2px solid rgba(255,255,255,0.3);
+  color: #fff;
+  font-size: 1.1em;
+  padding: 14px 40px;
+  border-radius: 10px;
+  cursor: pointer;
+  width: 260px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-big:hover { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.6); }
+.btn-big.gold { border-color: #ffd700; background: rgba(255,215,0,0.12); }
+.btn-big.gold:hover { background: rgba(255,215,0,0.22); }
+
+.menu-divider { width: 240px; border: none; border-top: 1px solid rgba(255,255,255,0.15); }
+
+/* Waiting / Join / Connecting screens */
+#scr-waiting, #scr-join, #scr-connecting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+  gap: 14px;
+  text-align: center;
+}
+
+#scr-waiting h2, #scr-join h2 { font-size: 1.4em; margin-bottom: 6px; }
+
+.room-code-box {
+  font-size: 2.5em;
+  font-weight: bold;
+  letter-spacing: 8px;
+  color: #ffd700;
+  background: rgba(0,0,0,0.4);
+  padding: 14px 30px;
+  border-radius: 10px;
+  border: 2px solid #ffd700;
+  font-family: monospace;
+}
+
+.url-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  max-width: 440px;
+}
+
+.url-row input {
+  flex: 1;
+  background: rgba(0,0,0,0.35);
+  border: 1.5px solid rgba(255,255,255,0.25);
+  color: #ccc;
+  font-size: 0.72em;
+  padding: 8px 10px;
+  border-radius: 7px;
+  outline: none;
+}
+
+.btn-sm {
+  background: rgba(255,215,0,0.15);
+  border: 1.5px solid #ffd700;
+  color: #ffd700;
+  padding: 8px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+.btn-sm:hover { background: rgba(255,215,0,0.28); }
+
+.code-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#code-input {
+  background: rgba(0,0,0,0.4);
+  border: 2px solid rgba(255,255,255,0.3);
+  color: #fff;
+  font-size: 1.4em;
+  padding: 10px 16px;
+  border-radius: 8px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  width: 200px;
+  outline: none;
+  text-align: center;
+  font-family: monospace;
+}
+#code-input:focus { border-color: #ffd700; }
+
+.status-text { font-size: 0.88em; opacity: 0.7; }
+.status-text.warn { color: #ffd700; opacity: 1; }
+
+.spinner {
+  width: 36px; height: 36px;
+  border: 4px solid rgba(255,255,255,0.15);
+  border-top-color: #ffd700;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== GAME ===== */
+#scr-game {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#info-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 0.78em;
+}
+
+.chip {
+  background: rgba(0,0,0,0.38);
+  padding: 3px 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+#msg { color: #ffd700; font-weight: bold; }
+
+.sec-lbl { font-size: 0.68em; opacity: 0.55; padding-left: 2px; }
+
+#ai-hand { display: flex; gap: 3px; flex-wrap: wrap; min-height: 54px; align-items: center; }
+
+.card-back {
+  width: 36px; height: 52px;
+  background: repeating-linear-gradient(45deg,#1e3045,#1e3045 4px,#263b52 4px,#263b52 8px);
+  border: 2px solid #4a6a8a;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+#flags-wrap { overflow-x: auto; padding-bottom: 2px; }
+#flags-row { display: flex; gap: 4px; min-width: 520px; }
+
+.fcol {
+  flex: 1; min-width: 52px; max-width: 82px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+
+.form-block { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+
+.slot {
+  width: 100%; height: 54px;
+  border-radius: 5px;
+  border: 1.5px dashed rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+
+.slot.open {
+  border-color: rgba(255,215,0,0.55);
+  background: rgba(255,215,0,0.06);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.15em; color: rgba(255,215,0,0.65);
+  transition: background 0.12s, border-color 0.12s;
+}
+.slot.open:hover { border-color: gold; background: rgba(255,215,0,0.18); color: gold; }
+
+.fmark {
+  width: 42px; height: 33px;
+  background: rgba(0,0,0,0.32);
+  border: 2px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.05em; flex-shrink: 0; position: relative;
+}
+.fmark.pw { background: rgba(52,152,219,0.45); border-color: #3498db; }
+.fmark.aw { background: rgba(231,76,60,0.45); border-color: #e74c3c; }
+
+.fnum { position: absolute; bottom: 1px; right: 3px; font-size: 0.38em; opacity: 0.48; }
+
+.flbl { font-size: 0.47em; color: #ffd700; min-height: 11px; text-align: center; line-height: 1; }
+
+.card {
+  width: 100%; height: 54px;
+  border-radius: 5px;
+  border: 2px solid rgba(255,255,255,0.22);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-weight: bold;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.38);
+  flex-shrink: 0;
+}
+
+.cv { font-size: 1.18em; line-height: 1; }
+.cs { font-size: 0.44em; opacity: 0.88; margin-top: 1px; }
+
+.card.hc { width: 58px; height: 83px; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; }
+.card.hc:hover { transform: translateY(-8px); box-shadow: 0 8px 14px rgba(0,0,0,0.45); }
+.card.hc.sel {
+  transform: translateY(-14px);
+  border-color: #ffd700;
+  box-shadow: 0 0 14px #ffd700, 0 8px 16px rgba(0,0,0,0.5);
+}
+
+.red    { background: linear-gradient(150deg,#e74c3c,#c0392b); }
+.blue   { background: linear-gradient(150deg,#3498db,#2471a3); }
+.green  { background: linear-gradient(150deg,#27ae60,#1e8449); }
+.yellow { background: linear-gradient(150deg,#f1c40f,#d4ac0d); color: #333; }
+.orange { background: linear-gradient(150deg,#e67e22,#ca6f1e); }
+.purple { background: linear-gradient(150deg,#9b59b6,#7d3c98); }
+
+#player-hand {
+  display: flex; gap: 5px; flex-wrap: wrap; justify-content: center;
+  min-height: 83px; align-items: flex-end;
+}
+
+#help-bar { font-size: 0.68em; opacity: 0.45; text-align: center; }
+
+/* ===== MOBILE ===== */
+* { touch-action: manipulation; }
+
+@media (max-width: 500px) {
+  body { padding: 4px 2px; gap: 4px; }
+  h1 { font-size: 0.95em; letter-spacing: 2px; }
+
+  /* Info bar */
+  #info-bar { gap: 4px; font-size: 0.7em; }
+  .chip { padding: 2px 7px; }
+
+  /* AI hand backs */
+  .card-back { width: 22px; height: 32px; border-width: 1px; }
+  #ai-hand { gap: 2px; min-height: 36px; }
+
+  /* Formation cards */
+  .slot { height: 36px; }
+  .card { height: 36px; border-width: 1.5px; }
+  .cv { font-size: 0.82em; }
+  .cs { font-size: 0.32em; }
+  .flbl { font-size: 0.32em; min-height: 9px; }
+
+  /* Flag marker */
+  .fmark { width: 26px; height: 22px; font-size: 0.75em; border-width: 1.5px; }
+  .fnum { font-size: 0.28em; }
+
+  /* Flags layout */
+  #flags-row { gap: 2px; min-width: 0; }
+  .fcol { min-width: 0; gap: 1px; }
+  .form-block { gap: 1px; }
+
+  /* Hand cards — larger touch targets */
+  .card.hc { width: 44px; height: 62px; }
+  .card.hc:hover { transform: none; }
+  .card.hc.sel { transform: translateY(-10px); }
+  #player-hand { gap: 4px; min-height: 62px; }
+
+  /* Screens */
+  .btn-big { width: 220px; font-size: 0.95em; padding: 12px 24px; }
+  .room-code-box { font-size: 1.8em; letter-spacing: 5px; padding: 10px 20px; }
+  .url-row { max-width: 100%; }
+  #code-input { font-size: 1.1em; width: 160px; }
+
+  /* Hide decorative help text */
+  #help-bar { display: none; }
+  .sec-lbl { font-size: 0.6em; }
+  .opp-label { font-size: 0.6em; }
+}
+
+/* Overlay */
+#overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.72); z-index: 99;
+  align-items: center; justify-content: center;
+}
+#overlay.on { display: flex; }
+#ov-box {
+  background: #152a1e; border: 3px solid #ffd700;
+  border-radius: 14px; padding: 30px 48px; text-align: center; max-width: 340px;
+}
+#ov-msg { font-size: 1.35em; line-height: 1.65; margin-bottom: 20px; white-space: pre-line; }
+#ov-box button {
+  background: #ffd700; color: #222; border: none;
+  padding: 10px 30px; border-radius: 8px; font-size: 1em; font-weight: bold; cursor: pointer;
+}
+#ov-box button:hover { background: #ffe94d; }
+
+.opp-label { font-size: 0.7em; opacity: 0.6; text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ===== MENU ===== -->
+<div id="scr-menu" class="screen">
+  <h1>⚔ バトルライン ⚔</h1>
+  <button class="btn-big" onclick="startCPUMode()">🤖 CPU と対戦</button>
+  <hr class="menu-divider">
+  <button class="btn-big gold" onclick="startAsHost()">🌐 部屋を作る（ホスト）</button>
+  <button class="btn-big gold" onclick="showJoinScreen()">🔗 部屋に入る（ゲスト）</button>
+  <p style="font-size:0.72em;opacity:0.5;margin-top:4px">オンライン対戦はPeerJSを使用します</p>
+</div>
+
+<!-- ===== WAITING (host) ===== -->
+<div id="scr-waiting" class="screen" hidden>
+  <h2>部屋を作りました</h2>
+  <p class="status-text">ルームコードを相手に伝えてください</p>
+  <div class="room-code-box" id="room-code-disp">...</div>
+  <div class="url-row">
+    <input id="room-url-input" readonly placeholder="URL生成中...">
+    <button class="btn-sm" onclick="copyURL()">コピー</button>
+  </div>
+  <div class="spinner"></div>
+  <p class="status-text warn" id="wait-status">接続待ち中...</p>
+  <button class="btn-sm" onclick="backToMenu()" style="margin-top:10px">← メニューへ</button>
+</div>
+
+<!-- ===== JOIN (guest) ===== -->
+<div id="scr-join" class="screen" hidden>
+  <h2>部屋に入る</h2>
+  <p class="status-text">ホストのルームコードを入力してください</p>
+  <div class="code-input-wrap">
+    <input id="code-input" maxlength="20" placeholder="コード入力" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')connectToHost()">
+    <button class="btn-sm" onclick="connectToHost()">接続</button>
+  </div>
+  <p class="status-text warn" id="join-status" style="min-height:1.2em"></p>
+  <button class="btn-sm" onclick="backToMenu()" style="margin-top:6px">← メニューへ</button>
+</div>
+
+<!-- ===== CONNECTING ===== -->
+<div id="scr-connecting" class="screen" hidden>
+  <h2 style="margin-bottom:16px">接続中...</h2>
+  <div class="spinner"></div>
+  <p class="status-text" style="margin-top:14px" id="conn-status">ホストに接続しています</p>
+</div>
+
+<!-- ===== GAME ===== -->
+<div id="scr-game" class="screen" hidden>
+  <h1>⚔ バトルライン ⚔</h1>
+
+  <div id="info-bar">
+    <span class="chip" id="ps">🔵 あなた: 0旗</span>
+    <span class="chip" id="as">🔴 <span id="opp-label-chip">CPU</span>: 0旗</span>
+    <span class="chip" id="dk">山札: 0枚</span>
+    <span class="chip" id="msg">...</span>
+  </div>
+
+  <div>
+    <div class="opp-label" id="opp-hand-label">CPU の手札</div>
+    <div id="ai-hand"></div>
+  </div>
+
+  <div id="flags-wrap">
+    <div id="flags-row"></div>
+  </div>
+
+  <div>
+    <div class="sec-lbl">あなたの手札</div>
+    <div id="player-hand"></div>
+  </div>
+
+  <div id="help-bar">
+    勝利: 旗5つ獲得 または 連続3旗 ／ 強さ: ウェッジ &gt; ファランクス &gt; バタリオン &gt; スカーミッシュ &gt; ホスト
+  </div>
+</div>
+
+<!-- Overlay -->
+<div id="overlay">
+  <div id="ov-box">
+    <div id="ov-msg"></div>
+    <button id="ov-btn" onclick="restartOrMenu()">もう一度プレイ</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ===== Constants =====
+const COLORS = ['red','blue','green','yellow','orange','purple'];
+const CN = { red:'赤', blue:'青', green:'緑', yellow:'黄', orange:'橙', purple:'紫' };
+const FT = { W:5, P:4, B:3, S:2, H:1 };
+const FN = { 5:'ウェッジ', 4:'ファランクス', 3:'バタリオン', 2:'スカーミッシュ', 1:'ホスト' };
+
+// ===== State =====
+let gameMode = 'cpu';   // 'cpu' | 'online'
+let myRole   = null;    // 'host' | 'guest'
+let peer     = null;
+let conn     = null;
+let G        = {};
+let sel      = null;
+
+// ===== Screen helpers =====
+function showScreen(id) {
+  ['scr-menu','scr-waiting','scr-join','scr-connecting','scr-game'].forEach(s => {
+    document.getElementById(s).hidden = (s !== id);
+  });
+}
+
+function backToMenu() {
+  cleanupPeer();
+  showScreen('scr-menu');
+}
+
+function cleanupPeer() {
+  if (conn)  { try { conn.close(); } catch(e){} conn = null; }
+  if (peer)  { try { peer.destroy(); } catch(e){} peer = null; }
+}
+
+// ===== Menu actions =====
+function startCPUMode() {
+  gameMode = 'cpu'; myRole = null;
+  document.getElementById('opp-label-chip').textContent = 'CPU';
+  document.getElementById('opp-hand-label').textContent = 'CPU の手札';
+  document.getElementById('ov-btn').textContent = 'もう一度プレイ';
+  showScreen('scr-game');
+  initGame();
+}
+
+function showJoinScreen() {
+  document.getElementById('join-status').textContent = '';
+  document.getElementById('code-input').value = '';
+  showScreen('scr-join');
+}
+
+// ===== Host flow =====
+function startAsHost() {
+  showScreen('scr-waiting');
+  document.getElementById('room-code-disp').textContent = '...';
+  document.getElementById('room-url-input').value = '';
+  document.getElementById('wait-status').textContent = 'PeerJSサーバーに接続中...';
+
+  cleanupPeer();
+  peer = new Peer();
+
+  peer.on('open', (id) => {
+    document.getElementById('room-code-disp').textContent = id;
+    const u = new URL(location.href);
+    u.searchParams.set('room', id);
+    document.getElementById('room-url-input').value = u.toString();
+    document.getElementById('wait-status').textContent = '相手の接続を待っています...';
+  });
+
+  peer.on('connection', (c) => {
+    // Accept only first connection
+    if (conn) { c.close(); return; }
+    conn = c;
+    conn.on('open', () => {
+      myRole = 'host';
+      gameMode = 'online';
+      document.getElementById('wait-status').textContent = '接続完了！ゲームを開始します...';
+      setTimeout(startOnlineGame, 500);
+    });
+    conn.on('data', onDataFromGuest);
+    conn.on('close', onDisconnect);
+    conn.on('error', e => console.warn('conn error', e));
+  });
+
+  peer.on('error', (err) => {
+    document.getElementById('wait-status').textContent = 'エラー: ' + err.type;
+  });
+}
+
+function copyURL() {
+  const v = document.getElementById('room-url-input').value;
+  if (!v) return;
+  navigator.clipboard.writeText(v).then(() => {
+    const b = document.querySelector('#scr-waiting .btn-sm');
+    const orig = b.textContent;
+    b.textContent = 'コピー完了!';
+    setTimeout(() => b.textContent = orig, 1500);
+  }).catch(() => {
+    document.getElementById('room-url-input').select();
+  });
+}
+
+// ===== Guest flow =====
+function connectToHost(code) {
+  code = code || document.getElementById('code-input').value.trim().toUpperCase();
+  if (!code) {
+    document.getElementById('join-status').textContent = 'コードを入力してください';
+    return;
+  }
+
+  document.getElementById('conn-status').textContent = 'ホストに接続中...';
+  showScreen('scr-connecting');
+
+  cleanupPeer();
+  peer = new Peer();
+
+  peer.on('open', () => {
+    document.getElementById('conn-status').textContent = 'ピアに接続中...';
+    conn = peer.connect(code, { reliable: true });
+
+    conn.on('open', () => {
+      myRole = 'guest';
+      gameMode = 'online';
+      document.getElementById('opp-label-chip').textContent = '相手';
+      document.getElementById('opp-hand-label').textContent = '相手の手札';
+      document.getElementById('ov-btn').textContent = 'メニューへ戻る';
+      showScreen('scr-game');
+      // Init blank G to avoid render errors while waiting for state
+      G = { deck: null, deckCount: 0, ph: [], ah: [], flags: Array(9).fill(0).map(()=>({p:[],a:[],w:null})), myTurn: false, over: false };
+      render();
+    });
+    conn.on('data', onDataFromHost);
+    conn.on('close', onDisconnect);
+    conn.on('error', e => {
+      showScreen('scr-join');
+      document.getElementById('join-status').textContent = '接続エラー: ' + e.type;
+    });
+  });
+
+  peer.on('error', err => {
+    showScreen('scr-join');
+    document.getElementById('join-status').textContent = 'エラー: ' + err.type + ' (コードを確認してください)';
+  });
+}
+
+// ===== Online game init (host only) =====
+function startOnlineGame() {
+  sel = null;
+  const d = shuf(mkDeck());
+  G = {
+    deck:  d.slice(14),
+    ph:    d.slice(0, 7),
+    ah:    d.slice(7, 14),
+    flags: Array(9).fill(0).map(() => ({ p: [], a: [], w: null })),
+    myTurn: true,
+    over: false,
+    winner: null
+  };
+  document.getElementById('opp-label-chip').textContent = '相手';
+  document.getElementById('opp-hand-label').textContent = '相手の手札';
+  document.getElementById('ov-btn').textContent = 'メニューへ戻る';
+  showScreen('scr-game');
+  render();
+  sendStateToGuest();
+}
+
+// ===== Host ↔ Guest messaging =====
+function guestPerspective() {
+  return {
+    deckCount: G.deck.length,
+    ph: G.ah.map(c => ({...c})),
+    ah: G.ph.map(c => ({...c})),
+    flags: G.flags.map(f => ({
+      p: f.a.map(c => ({...c})),
+      a: f.p.map(c => ({...c})),
+      w: f.w === 'p' ? 'a' : f.w === 'a' ? 'p' : null
+    })),
+    myTurn: !G.myTurn,
+    over: G.over,
+    // winner from guest's perspective
+    winner: G.winner === 'player' ? 'guest' : G.winner === 'ai' ? 'host' : G.winner
+  };
+}
+
+function sendStateToGuest(gameOverMsg) {
+  if (!conn || !conn.open) return;
+  conn.send({ type: 'state', state: guestPerspective(), gameOverMsg });
+}
+
+function onDataFromGuest(data) {
+  if (data.type !== 'move' || G.over || G.myTurn) return;
+
+  const { flagIndex, card } = data;
+  const flag = G.flags[flagIndex];
+  if (!flag || flag.w || flag.a.length >= 3) return;
+
+  // Validate card is in guest's hand
+  const found = G.ah.find(c => c.id === card.id);
+  if (!found) return;
+
+  flag.a.push(found);
+  G.ah = G.ah.filter(c => c.id !== card.id);
+  if (G.deck.length > 0) G.ah.push(G.deck.pop());
+
+  autoClaim();
+
+  if (!chkWin()) {
+    G.myTurn = true;
+    render();
+    sendStateToGuest();
+  }
+}
+
+function onDataFromHost(data) {
+  if (data.type !== 'state') return;
+  const s = data.state;
+
+  G = {
+    deck: null,
+    deckCount: s.deckCount,
+    ph: s.ph,
+    ah: s.ah,
+    flags: s.flags,
+    myTurn: s.myTurn,
+    over: s.over,
+    winner: s.winner
+  };
+
+  if (s.over) {
+    const wMsg = s.winner === 'guest'  ? 'あなたの勝ち！🎉'
+               : s.winner === 'host'   ? '相手の勝ち...'
+               : '引き分け！';
+    showOverlay(wMsg + (data.gameOverMsg ? '\n' + data.gameOverMsg : ''));
+    return;
+  }
+
+  render();
+}
+
+function onDisconnect() {
+  if (G && !G.over) {
+    G.over = true;
+    showOverlay('相手との接続が切れました');
+  }
+}
+
+// ===== Deck helpers =====
+function mkDeck() {
+  const d = [];
+  for (const c of COLORS) for (let v = 1; v <= 10; v++) d.push({ c, v, id: c + v });
+  return d;
+}
+
+function shuf(a) {
+  const b = [...a];
+  for (let i = b.length-1; i > 0; i--) {
+    const j = 0|Math.random()*(i+1); [b[i],b[j]]=[b[j],b[i]];
+  }
+  return b;
+}
+
+function getDeckCount() { return G.deck ? G.deck.length : (G.deckCount ?? 0); }
+
+// ===== Formation logic =====
+function evForm(cards) {
+  if (cards.length < 3) return null;
+  const vs = [...cards.map(x => x.v)].sort((a,b) => a-b);
+  const cs = cards.map(x => x.c);
+  const flush = cs.every(c => c === cs[0]);
+  const str   = vs[1] === vs[0]+1 && vs[2] === vs[1]+1;
+  const tok   = vs[0] === vs[1] && vs[1] === vs[2];
+  const sum   = vs[0]+vs[1]+vs[2];
+  const t = flush&&str ? FT.W : tok ? FT.P : flush ? FT.B : str ? FT.S : FT.H;
+  return { t, sum, vs };
+}
+
+function cmpF(a, b) {
+  if (!a && !b) return 0; if (!a) return -1; if (!b) return 1;
+  if (a.t !== b.t) return a.t - b.t;
+  if (a.sum !== b.sum) return a.sum - b.sum;
+  for (let i = 2; i >= 0; i--) if (a.vs[i] !== b.vs[i]) return a.vs[i] - b.vs[i];
+  return 0;
+}
+
+// ===== CPU Game init =====
+function initGame() {
+  sel = null;
+  const d = shuf(mkDeck());
+  G = {
+    deck: d.slice(14),
+    ph: d.slice(0, 7),
+    ah: d.slice(7, 14),
+    flags: Array(9).fill(0).map(() => ({ p: [], a: [], w: null })),
+    myTurn: true,
+    over: false,
+    winner: null
+  };
+  document.getElementById('overlay').classList.remove('on');
+  render();
+}
+
+// ===== Render =====
+function render() {
+  rStatus(); rAIHand(); rFlags(); rPHand();
+}
+
+function rStatus() {
+  const pc = G.flags.filter(f => f.w === 'p').length;
+  const ac = G.flags.filter(f => f.w === 'a').length;
+  document.getElementById('ps').textContent = `🔵 あなた: ${pc}旗`;
+  document.getElementById('as').innerHTML  = `🔴 <span id="opp-label-chip">${gameMode==='cpu'?'CPU':'相手'}</span>: ${ac}旗`;
+  document.getElementById('dk').textContent = `山札: ${getDeckCount()}枚`;
+  const mc = document.getElementById('msg');
+  if (G.over) { mc.textContent = ''; return; }
+  if (G.myTurn) {
+    mc.textContent = sel ? `${CN[sel.c]}${sel.v} を選択中 → 旗をクリック` : 'カードを選んでください';
+  } else {
+    mc.textContent = gameMode === 'online' ? '相手の番です...' : 'CPUが考えています...';
+  }
+}
+
+function rAIHand() {
+  const el = document.getElementById('ai-hand');
+  el.innerHTML = '';
+  const n = G.ah ? G.ah.length : 0;
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div'); d.className = 'card-back'; el.appendChild(d);
+  }
+}
+
+function mkCardEl(card, inHand = false) {
+  const d = document.createElement('div');
+  d.className = `card ${card.c}${inHand ? ' hc' : ''}`;
+  if (inHand && sel && sel.id === card.id) d.classList.add('sel');
+  const v = document.createElement('div'); v.className = 'cv'; v.textContent = card.v;
+  const s = document.createElement('div'); s.className = 'cs'; s.textContent = CN[card.c];
+  d.appendChild(v); d.appendChild(s);
+  return d;
+}
+
+function mkSlotEl(open, onClick) {
+  const d = document.createElement('div');
+  d.className = 'slot' + (open ? ' open' : '');
+  if (open) { d.textContent = '＋'; d.onclick = onClick; }
+  return d;
+}
+
+function rFlags() {
+  const row = document.getElementById('flags-row');
+  row.innerHTML = '';
+
+  (G.flags || []).forEach((flag, fi) => {
+    const col = document.createElement('div'); col.className = 'fcol';
+
+    // AI side (top): newest card closest to flag = show at bottom of this block
+    const aiBlk = document.createElement('div'); aiBlk.className = 'form-block';
+    for (let j = 0; j < 3; j++) {
+      const idx = j - (3 - flag.a.length);
+      if (idx >= 0 && idx < flag.a.length) aiBlk.appendChild(mkCardEl(flag.a[idx]));
+      else aiBlk.appendChild(mkSlotEl(false));
+    }
+    const aiLbl = document.createElement('div'); aiLbl.className = 'flbl';
+    if (flag.a.length === 3) { const f = evForm(flag.a); aiLbl.textContent = f ? FN[f.t] : ''; }
+    aiBlk.appendChild(aiLbl);
+
+    // Flag marker
+    const fm = document.createElement('div'); fm.className = 'fmark';
+    const ico = document.createElement('span');
+    if (flag.w === 'p') { fm.classList.add('pw'); ico.textContent = '🔵'; }
+    else if (flag.w === 'a') { fm.classList.add('aw'); ico.textContent = '🔴'; }
+    else ico.textContent = '🚩';
+    fm.appendChild(ico);
+    const fn = document.createElement('span'); fn.className = 'fnum'; fn.textContent = fi+1;
+    fm.appendChild(fn);
+
+    // Player side (bottom): newest card closest to flag = show at top of this block
+    const pBlk = document.createElement('div'); pBlk.className = 'form-block';
+    const pLbl = document.createElement('div'); pLbl.className = 'flbl';
+    if (flag.p.length === 3) { const f = evForm(flag.p); pLbl.textContent = f ? FN[f.t] : ''; }
+    pBlk.appendChild(pLbl);
+
+    const canPlay = G.myTurn && !flag.w && flag.p.length < 3 && sel && !G.over;
+    for (let j = 0; j < 3; j++) {
+      const idx = flag.p.length - 1 - j;
+      if (idx >= 0) pBlk.appendChild(mkCardEl(flag.p[idx]));
+      else if (j === (2 - flag.p.length) + 1 && canPlay)
+        pBlk.appendChild(mkSlotEl(true, () => playCard(fi)));
+      else pBlk.appendChild(mkSlotEl(false));
+    }
+
+    col.appendChild(aiBlk); col.appendChild(fm); col.appendChild(pBlk);
+    row.appendChild(col);
+  });
+}
+
+function rPHand() {
+  const el = document.getElementById('player-hand');
+  el.innerHTML = '';
+  (G.ph || []).forEach(card => {
+    const c = mkCardEl(card, true);
+    c.onclick = () => pickCard(card);
+    el.appendChild(c);
+  });
+}
+
+// ===== Game logic =====
+function pickCard(card) {
+  if (!G.myTurn || G.over) return;
+  sel = (sel && sel.id === card.id) ? null : card;
+  render();
+}
+
+function playCard(fi) {
+  if (!G.myTurn || !sel || G.over) return;
+  const flag = G.flags[fi];
+  if (!flag || flag.w || flag.p.length >= 3) return;
+
+  const played = sel;
+  flag.p.push(played);
+  G.ph = G.ph.filter(c => c.id !== played.id);
+  sel = null;
+
+  if (gameMode === 'cpu') {
+    if (G.deck.length > 0) G.ph.push(G.deck.pop());
+    autoClaim();
+    if (chkWin()) return;
+    G.myTurn = false;
+    render();
+    setTimeout(aiTurn, 750);
+  } else {
+    // Online
+    G.myTurn = false;
+    if (myRole === 'host') {
+      if (G.deck.length > 0) G.ph.push(G.deck.pop());
+      autoClaim();
+      if (chkWin()) return;
+      render();
+      sendStateToGuest();
+    } else {
+      // Guest: optimistic local update, then send to host
+      render();
+      conn.send({ type: 'move', flagIndex: fi, card: played });
+    }
+  }
+}
+
+function autoClaim() {
+  G.flags.forEach(f => {
+    if (f.w || f.p.length < 3 || f.a.length < 3) return;
+    const cmp = cmpF(evForm(f.p), evForm(f.a));
+    if (cmp > 0) f.w = 'p'; else if (cmp < 0) f.w = 'a';
+  });
+}
+
+function chkWin() {
+  const pc = G.flags.filter(f => f.w === 'p').length;
+  const ac = G.flags.filter(f => f.w === 'a').length;
+  const opp = gameMode === 'online' ? '相手' : 'CPU';
+
+  if (pc >= 5) { endGame('あなたの勝ち！🎉\n5つの旗を獲得！', 'player'); return true; }
+  if (ac >= 5) { endGame(`${opp}の勝ち...\n5つの旗を獲得された`, 'ai'); return true; }
+  for (let i = 0; i <= 6; i++) {
+    if (G.flags[i].w==='p' && G.flags[i+1].w==='p' && G.flags[i+2].w==='p')
+      { endGame('あなたの勝ち！🎉\n連続3旗を獲得！', 'player'); return true; }
+    if (G.flags[i].w==='a' && G.flags[i+1].w==='a' && G.flags[i+2].w==='a')
+      { endGame(`${opp}の勝ち...\n連続3旗を獲得された`, 'ai'); return true; }
+  }
+  const pCan = G.flags.some(f => !f.w && f.p.length < 3);
+  const aCan = G.flags.some(f => !f.w && f.a.length < 3);
+  if (!pCan && !aCan) {
+    if (pc > ac) endGame(`あなたの勝ち！🎉\n旗数: ${pc} vs ${ac}`, 'player');
+    else if (ac > pc) endGame(`${opp}の勝ち...\n旗数: ${ac} vs ${pc}`, 'ai');
+    else endGame(`引き分け！\n旗数: ${pc} vs ${ac}`, 'draw');
+    return true;
+  }
+  return false;
+}
+
+function endGame(msg, winnerSide) {
+  G.over = true;
+  G.winner = winnerSide;
+  showOverlay(msg);
+  if (gameMode === 'online' && myRole === 'host') {
+    sendStateToGuest(msg);
+  }
+  render();
+}
+
+function showOverlay(msg) {
+  document.getElementById('ov-msg').textContent = msg;
+  document.getElementById('overlay').classList.add('on');
+}
+
+function restartOrMenu() {
+  document.getElementById('overlay').classList.remove('on');
+  if (gameMode === 'online') {
+    cleanupPeer();
+    gameMode = 'cpu';
+    myRole = null;
+    showScreen('scr-menu');
+  } else {
+    initGame();
+  }
+}
+
+// ===== AI =====
+function aiTurn() {
+  if (G.over) return;
+  const avail = G.flags.map((f,i)=>({f,i})).filter(({f})=>!f.w && f.a.length < 3);
+  if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
+
+  let best = null, bsc = -Infinity;
+  for (const card of G.ah) {
+    for (const {f,i} of avail) {
+      const sc = aiScore(card, f, i);
+      if (sc > bsc) { bsc = sc; best = { card, fi: i }; }
+    }
+  }
+  const mv = best || { card: G.ah[0], fi: avail[0].i };
+  G.flags[mv.fi].a.push(mv.card);
+  G.ah = G.ah.filter(c => c.id !== mv.card.id);
+  if (G.deck.length > 0) G.ah.push(G.deck.pop());
+  autoClaim();
+  if (chkWin()) return;
+  G.myTurn = true;
+  render();
+}
+
+function aiScore(card, flag, fi) {
+  const sim = [...flag.a, card];
+  const totalPW = G.flags.filter(f => f.w === 'p').length;
+  let sc = 0;
+  if (sim.length === 3) {
+    const af = evForm(sim), pf = flag.p.length === 3 ? evForm(flag.p) : null;
+    sc += af.t * 200 + af.sum;
+    if (pf) { if (cmpF(af,pf)>0) sc+=900; else if (cmpF(af,pf)<0) sc-=400; }
+    else sc += 180;
+  } else {
+    sc += potSc(sim) * 12 + card.v * 2;
+    sc += flag.a.length * 65;
+  }
+  if (flag.p.length === 2) {
+    if (bestSc(sim) > bestSc(flag.p)) sc += 260;
+  }
+  let pStr = 0;
+  for (let j = Math.max(0,fi-2); j <= Math.min(8,fi+2); j++)
+    if (G.flags[j].w === 'p') pStr++;
+  sc -= pStr * 28;
+  if (totalPW >= 4) sc += 150;
+  return sc;
+}
+
+function bestSc(cs) {
+  const f = evForm(cs); if (f) return f.t*200+f.sum;
+  if (cs.length === 2) {
+    const sc2 = cs[0].c===cs[1].c, df = Math.abs(cs[0].v-cs[1].v);
+    if (sc2 && df<=2) return FT.W*200+27;
+    if (sc2) return FT.B*200+22;
+    if (df<=2) return FT.S*200+22;
+    return FT.H*200+cs[0].v+cs[1].v;
+  }
+  return cs.length ? FT.H*200+cs[0].v : 0;
+}
+
+function potSc(cs) {
+  if (!cs.length) return 0;
+  if (cs.length === 1) return cs[0].v;
+  const vs = cs.map(x=>x.v).sort((a,b)=>a-b);
+  const sameC = cs.every(x=>x.c===cs[0].c), df = vs[vs.length-1]-vs[0];
+  if (sameC && df<=2) return 500;
+  if (sameC) return 285;
+  if (df<=2) return 145;
+  return 42 + vs.reduce((a,b)=>a+b,0);
+}
+
+// ===== Entry point =====
+window.addEventListener('load', () => {
+  const room = new URLSearchParams(location.search).get('room');
+  if (room) {
+    document.getElementById('code-input').value = room;
+    showScreen('scr-connecting');
+    connectToHost(room);
+  } else {
+    showScreen('scr-menu');
+  }
+});
+</script>
+</body>
+</html>
