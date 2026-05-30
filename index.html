@@ -26,7 +26,7 @@
   --c-red:    #C82020;
   --c-blue:   #1E52C0;
   --c-green:  #1A8040;
-  --c-yellow: #C08C00;
+  --c-yellow: #1A1A1A;
   --c-orange: #D47800;
   --c-purple: #7820B0;
 }
@@ -1514,7 +1514,7 @@ body {
 
 // ===== Constants =====
 const COLORS = ['red','blue','green','yellow','orange','purple'];
-const CN = { red:'赤', blue:'青', green:'緑', yellow:'黄', orange:'橙', purple:'紫' };
+const CN = { red:'赤', blue:'青', green:'緑', yellow:'黒', orange:'橙', purple:'紫' };
 const FT = { W:5, P:4, B:3, S:2, H:1 };
 const FN = { 5:'ウェッジ', 4:'ファランクス', 3:'バタリオン', 2:'スカーミッシュ', 1:'ホスト' };
 
@@ -1525,6 +1525,8 @@ let peer     = null;
 let conn     = null;
 let G        = {};
 let sel      = null;
+let lastHostCode    = null;
+let disconnectTimer = null;
 
 // ===== Screen helpers =====
 function showScreen(id) {
@@ -1653,16 +1655,23 @@ function startAsHost() {
   });
 
   peer.on('connection', (c) => {
-    if (conn) { c.close(); return; }
+    // ゲーム中は再接続を許可（切断タイマーが走っている間）
+    if (conn && conn.open) { c.close(); return; }
+    if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
     conn = c;
     conn.on('open', () => {
-      myRole = 'host';
-      gameMode = 'online';
-      document.getElementById('wait-status').textContent = '接続完了！ゲームを開始します...';
-      setTimeout(startOnlineGame, 500);
+      if (gameMode === 'online' && G && !G.over) {
+        // 再接続: 現在の状態を再送信
+        sendStateToGuest();
+      } else {
+        myRole = 'host';
+        gameMode = 'online';
+        document.getElementById('wait-status').textContent = '接続完了！ゲームを開始します...';
+        setTimeout(startOnlineGame, 500);
+      }
     });
     conn.on('data', onDataFromGuest);
-    conn.on('close', onDisconnect);
+    conn.on('close', scheduleDisconnect);
     conn.on('error', e => console.warn('conn error', e));
   });
 
@@ -1691,6 +1700,7 @@ function connectToHost(code, fromUrl = false) {
     document.getElementById('join-status').textContent = 'コードを入力してください';
     return;
   }
+  lastHostCode = code;
 
   document.getElementById('conn-status').textContent = 'ホストに接続中...';
   showScreen('scr-connecting');
@@ -1713,7 +1723,7 @@ function connectToHost(code, fromUrl = false) {
       render();
     });
     conn.on('data', onDataFromHost);
-    conn.on('close', onDisconnect);
+    conn.on('close', scheduleDisconnect);
     conn.on('error', e => {
       cleanupPeer();
       if (fromUrl) { showScreen('scr-menu'); }
@@ -1773,7 +1783,7 @@ function guestPerspective() {
     })),
     myTurn: !G.myTurn,
     over: G.over,
-    winner: G.winner === 'player' ? 'guest' : G.winner === 'ai' ? 'host' : G.winner,
+    winner: G.winner === 'player' ? 'host' : G.winner === 'ai' ? 'guest' : G.winner,
     lastP: G.lastA ? { fi: G.lastA.fi, id: G.lastA.id } : null,
     lastA: G.lastP ? { fi: G.lastP.fi, id: G.lastP.id } : null
   };
@@ -1785,6 +1795,8 @@ function sendStateToGuest(gameOverMsg) {
 }
 
 function onDataFromGuest(data) {
+  if (data.type === 'ping') return;
+  if (data.type === 'reconnect') { sendStateToGuest(); return; }
   if (G.over) return;
   if (data.type === 'forfeit') {
     recordResult('win', G.flags.filter(f=>f.w==='p').length, G.flags.filter(f=>f.w==='a').length, 'online');
@@ -1807,6 +1819,7 @@ function onDataFromGuest(data) {
 }
 
 function onDataFromHost(data) {
+  if (data.type === 'ping') return;
   if (G.over) return;
   if (data.type === 'forfeit') {
     recordResult('win', 0, 0, 'online');
@@ -1823,18 +1836,62 @@ function onDataFromHost(data) {
     lastP: s.lastP, lastA: s.lastA
   };
   if (s.over) {
-    const wMsg = s.winner==='guest' ? 'あなたの勝ち！🎉' : s.winner==='host' ? '相手の勝ち...' : '引き分け！';
+    const gPc = s.flags.filter(f => f.w === 'p').length;
+    const hPc = s.flags.filter(f => f.w === 'a').length;
+    let wMsg;
+    if (s.winner === 'guest') {
+      const reason = gPc >= 5 ? '5つの旗を獲得！'
+                   : (gPc + hPc === 9) ? `旗数: ${gPc} vs ${hPc}`
+                   : '連続3旗を獲得！';
+      wMsg = `あなたの勝ち！🎉\n${reason}`;
+    } else if (s.winner === 'host') {
+      const reason = hPc >= 5 ? '5つの旗を獲得された'
+                   : (gPc + hPc === 9) ? `旗数: ${hPc} vs ${gPc}`
+                   : '連続3旗を獲得された';
+      wMsg = `相手の勝ち...\n${reason}`;
+    } else {
+      wMsg = `引き分け！\n旗数: ${gPc} vs ${hPc}`;
+    }
     const result = s.winner==='guest' ? 'win' : s.winner==='host' ? 'lose' : 'draw';
     recordResult(result, 0, 0, 'online');
-    showOverlay(wMsg + (data.gameOverMsg ? '\n' + data.gameOverMsg : ''));
+    showOverlay(wMsg);
     return;
   }
   render();
 }
 
-function onDisconnect() {
-  if (G && !G.over) { G.over = true; showOverlay('相手との接続が切れました'); }
+function scheduleDisconnect() {
+  if (disconnectTimer) return;
+  disconnectTimer = setTimeout(() => {
+    disconnectTimer = null;
+    if (G && !G.over) { G.over = true; showOverlay('相手との接続が切れました'); }
+  }, 25000); // 25秒の猶予
 }
+
+function reconnectToHost() {
+  if (!lastHostCode || !G || G.over || (conn && conn.open)) return;
+  try { if (peer) peer.destroy(); } catch(e){}
+  peer = new Peer();
+  peer.on('open', () => {
+    conn = peer.connect(lastHostCode, { reliable: true });
+    conn.on('open', () => {
+      if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
+      conn.send({ type: 'reconnect' });
+    });
+    conn.on('data', onDataFromHost);
+    conn.on('close', scheduleDisconnect);
+    conn.on('error', () => {});
+  });
+  peer.on('error', () => {});
+}
+
+// タブが再び表示されたとき自動再接続（スマホ対策）
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && gameMode === 'online' && myRole === 'guest'
+      && G && !G.over && lastHostCode && (!conn || !conn.open)) {
+    reconnectToHost();
+  }
+});
 
 // ===== Deck helpers =====
 function mkDeck() {
