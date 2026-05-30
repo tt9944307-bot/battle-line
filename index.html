@@ -926,16 +926,66 @@ function restartOrMenu() {
   }
 }
 
-// ===== AI =====
+// ===== AI (高度化版) =====
+
+// AIの視点から「未知のカード」= 相手の手札 + 残りデッキ
+function unknownCards() {
+  const known = new Set();
+  G.ah.forEach(c => known.add(c.id));
+  G.flags.forEach(f => {
+    f.p.forEach(c => known.add(c.id));
+    f.a.forEach(c => known.add(c.id));
+  });
+  return mkDeck().filter(c => !known.has(c.id));
+}
+
+// pool から n 枚追加したときの最強フォーメーションを返す
+function bestReachable(cards, pool) {
+  const n = 3 - cards.length;
+  if (n === 0) return evForm(cards);
+  let best = null;
+  const p = pool.length > 50 ? pool.slice(0, 50) : pool;
+  if (n === 1) {
+    for (const c of p) {
+      const f = evForm([...cards, c]);
+      if (!best || cmpF(f, best) > 0) best = f;
+    }
+  } else if (n === 2) {
+    for (let i = 0; i < p.length; i++)
+      for (let j = i+1; j < p.length; j++) {
+        const f = evForm([...cards, p[i], p[j]]);
+        if (!best || cmpF(f, best) > 0) best = f;
+      }
+  } else {
+    // n=3: 上位20枚で試算
+    const top = [...p].sort((a,b) => b.v - a.v).slice(0, 20);
+    for (let i = 0; i < top.length; i++)
+      for (let j = i+1; j < top.length; j++)
+        for (let k = j+1; k < top.length; k++) {
+          const f = evForm([top[i], top[j], top[k]]);
+          if (!best || cmpF(f, best) > 0) best = f;
+        }
+  }
+  return best;
+}
+
+// 旗が参加する連続3本グループ数（中央ほど高い: 1,2,3,3,3,3,3,2,1）
+function flagStrategicVal(fi) {
+  let v = 0;
+  for (let s = 0; s <= 6; s++) if (fi >= s && fi <= s+2) v++;
+  return v;
+}
+
 function aiTurn() {
   if (G.over) return;
   const avail = G.flags.map((f,i)=>({f,i})).filter(({f})=>!f.w && f.a.length < 3);
   if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
 
+  const unk = unknownCards();
   let best = null, bsc = -Infinity;
   for (const card of G.ah) {
     for (const {f,i} of avail) {
-      const sc = aiScore(card, f, i);
+      const sc = aiScore(card, f, i, unk);
       if (sc > bsc) { bsc = sc; best = { card, fi: i }; }
     }
   }
@@ -949,40 +999,71 @@ function aiTurn() {
   render();
 }
 
-function aiScore(card, flag, fi) {
+function aiScore(card, flag, fi, unk) {
   const sim = [...flag.a, card];
-  const totalPW = G.flags.filter(f => f.w === 'p').length;
   let sc = 0;
-  if (sim.length === 3) {
-    const af = evForm(sim), pf = flag.p.length === 3 ? evForm(flag.p) : null;
-    sc += af.t * 200 + af.sum;
-    if (pf) { if (cmpF(af,pf)>0) sc+=900; else if (cmpF(af,pf)<0) sc-=400; }
-    else sc += 180;
-  } else {
-    sc += potSc(sim) * 12 + card.v * 2;
-    sc += flag.a.length * 65;
-  }
-  if (flag.p.length === 2) {
-    if (bestSc(sim) > bestSc(flag.p)) sc += 260;
-  }
-  let pStr = 0;
-  for (let j = Math.max(0,fi-2); j <= Math.min(8,fi+2); j++)
-    if (G.flags[j].w === 'p') pStr++;
-  sc -= pStr * 28;
-  if (totalPW >= 4) sc += 150;
-  return sc;
-}
 
-function bestSc(cs) {
-  const f = evForm(cs); if (f) return f.t*200+f.sum;
-  if (cs.length === 2) {
-    const sc2 = cs[0].c===cs[1].c, df = Math.abs(cs[0].v-cs[1].v);
-    if (sc2 && df<=2) return FT.W*200+27;
-    if (sc2) return FT.B*200+22;
-    if (df<=2) return FT.S*200+22;
-    return FT.H*200+cs[0].v+cs[1].v;
+  // ── 1. フォーメーション価値 ──────────────────────
+  if (sim.length === 3) {
+    const af = evForm(sim);
+
+    if (flag.p.length === 3) {
+      // 両者完成 → 直接比較
+      const cmp = cmpF(af, evForm(flag.p));
+      sc += cmp > 0 ? 5000 : cmp < 0 ? -4000 : -800;
+    } else {
+      // 自分だけ完成 → 相手が取れる最強フォーメーションと比較
+      const bestOpp = bestReachable(flag.p, unk);
+      const cmp = bestOpp ? cmpF(af, bestOpp) : 1;
+      sc += cmp > 0 ? 4000   // どんな手を引かれても勝てる
+          : cmp === 0 ? 500  // 引き次第
+          : 150;             // 負けるかもだが完成は価値あり
+      sc += af.t * 150 + af.sum * 5;
+    }
+  } else {
+    // 未完成 → 自分と相手の到達可能最強フォーメーションを比較
+    const bestMine = bestReachable(sim,  unk);
+    const bestOpp  = bestReachable(flag.p, unk);
+    if (bestMine && bestOpp) {
+      const cmp = cmpF(bestMine, bestOpp);
+      sc += cmp > 0 ? 400 : cmp < 0 ? -100 : 0;
+    }
+    sc += potSc(sim) * 12 + card.v * 4;
+    sc += flag.a.length * 100; // 既にカードがある旗を優先
   }
-  return cs.length ? FT.H*200+cs[0].v : 0;
+
+  // ── 2. 数学的に負け確定の旗には投資しない ────────
+  if (flag.p.length === 3 && sim.length < 3) {
+    const bestMine = bestReachable(sim, unk);
+    if (bestMine && cmpF(bestMine, evForm(flag.p)) < 0) sc -= 1500;
+  }
+
+  // ── 3. 旗の戦略的価値（中央ほど重要）────────────
+  sc += flagStrategicVal(fi) * 60;
+
+  // ── 4. 連続フラグの攻防（最重要）────────────────
+  for (let s = 0; s <= 6; s++) {
+    const g = [s, s+1, s+2];
+    if (!g.includes(fi)) continue;
+    const aiW = g.filter(j => G.flags[j].w === 'a').length;
+    const pW  = g.filter(j => G.flags[j].w === 'p').length;
+
+    // 相手の連続勝利をブロック（最優先）
+    if (pW === 2 && !G.flags[fi].w) sc += 2500;
+    else if (pW === 1 && !G.flags[fi].w) sc += 180;
+
+    // 自分の連続勝利を狙う
+    if (aiW === 2 && !G.flags[fi].w) sc += 2000;
+    else if (aiW === 1 && !G.flags[fi].w) sc += 150;
+  }
+
+  // ── 5. 全体的な旗数プレッシャー ──────────────────
+  const totalPW = G.flags.filter(f => f.w === 'p').length;
+  const totalAW = G.flags.filter(f => f.w === 'a').length;
+  if (totalPW >= 4) sc += 400; // 相手があと1本で勝ち → 全力阻止
+  if (totalAW >= 4) sc += 300; // 自分があと1本で勝ち → 確実に取る
+
+  return sc;
 }
 
 function potSc(cs) {
@@ -991,9 +1072,9 @@ function potSc(cs) {
   const vs = cs.map(x=>x.v).sort((a,b)=>a-b);
   const sameC = cs.every(x=>x.c===cs[0].c), df = vs[vs.length-1]-vs[0];
   if (sameC && df<=2) return 500;
-  if (sameC) return 285;
-  if (df<=2) return 145;
-  return 42 + vs.reduce((a,b)=>a+b,0);
+  if (sameC) return 300;
+  if (df<=2) return 160;
+  return 50 + vs.reduce((a,b)=>a+b,0);
 }
 
 // ===== Entry point =====
