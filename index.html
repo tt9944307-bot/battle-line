@@ -535,12 +535,12 @@ body {
 }
 .room-code-box {
   font-family: 'Cinzel', serif;
-  font-size: 2em;
+  font-size: 3em;
   font-weight: 700;
-  letter-spacing: 6px;
+  letter-spacing: 16px;
   color: var(--ink);
   background: var(--surface);
-  padding: 14px 24px;
+  padding: 16px 32px 16px 48px;
   border-radius: 10px;
   border: 1.5px solid var(--brass);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 2px 8px rgba(42,35,24,.1);
@@ -578,11 +578,10 @@ body {
   border: 2px solid var(--parchment-dk);
   border-radius: 8px;
   color: var(--ink);
-  font-size: 1.35em;
-  padding: 10px 14px;
-  letter-spacing: 4px;
-  text-transform: uppercase;
-  width: 190px;
+  font-size: 1.6em;
+  padding: 10px 12px;
+  letter-spacing: 10px;
+  width: 130px;
   outline: none;
   text-align: center;
   font-family: 'Cinzel', serif;
@@ -1134,9 +1133,9 @@ body {
 
   .logo-title { font-size: 24px; }
   .menu-btn-ja { font-size: 13.5px; }
-  .room-code-box { font-size: 1.6em; letter-spacing: 4px; }
+  .room-code-box { font-size: 2.4em; letter-spacing: 12px; padding: 14px 28px 14px 40px; }
   .url-row { max-width: 100%; }
-  #code-input { font-size: 1.2em; width: 165px; }
+  #code-input { font-size: 1.4em; width: 120px; letter-spacing: 8px; }
 
   /* Game: slightly smaller */
   .card { height: 44px; }
@@ -1356,8 +1355,9 @@ body {
   <div class="lobby-title">部屋に入る</div>
   <div class="lobby-sub">ホストのルームコードを入力してください</div>
   <div class="code-input-wrap">
-    <input id="code-input" maxlength="20" placeholder="コード入力"
-      oninput="this.value=this.value.toUpperCase()"
+    <input id="code-input" maxlength="3" placeholder="000"
+      inputmode="numeric" pattern="[0-9]*"
+      oninput="this.value=this.value.replace(/\D/g,'')"
       onkeydown="if(event.key==='Enter')connectToHost()">
     <button class="btn-sm" onclick="connectToHost()">接続</button>
   </div>
@@ -1641,43 +1641,53 @@ function startAsHost() {
   showScreen('scr-waiting');
   document.getElementById('room-code-disp').textContent = '...';
   document.getElementById('room-url-input').value = '';
-  document.getElementById('wait-status').textContent = 'PeerJSサーバーに接続中...';
+  document.getElementById('wait-status').textContent = 'サーバーに接続中...';
 
   cleanupPeer();
-  peer = new Peer();
 
-  peer.on('open', (id) => {
-    document.getElementById('room-code-disp').textContent = id;
-    const u = new URL(location.href);
-    u.searchParams.set('room', id);
-    document.getElementById('room-url-input').value = u.toString();
-    document.getElementById('wait-status').textContent = '相手の接続を待っています...';
-  });
+  function tryCode() {
+    const code = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+    peer = new Peer('bl-' + code);
 
-  peer.on('connection', (c) => {
-    // ゲーム中は再接続を許可（切断タイマーが走っている間）
-    if (conn && conn.open) { c.close(); return; }
-    if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
-    conn = c;
-    conn.on('open', () => {
-      if (gameMode === 'online' && G && !G.over) {
-        // 再接続: 現在の状態を再送信
-        sendStateToGuest();
+    peer.on('open', () => {
+      document.getElementById('room-code-disp').textContent = code;
+      const u = new URL(location.href);
+      u.searchParams.set('room', code);
+      document.getElementById('room-url-input').value = u.toString();
+      document.getElementById('wait-status').textContent = '相手の接続を待っています...';
+    });
+
+    peer.on('connection', (c) => {
+      if (conn && conn.open) { c.close(); return; }
+      if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
+      conn = c;
+      conn.on('open', () => {
+        if (gameMode === 'online' && G && !G.over) {
+          sendStateToGuest();
+        } else {
+          myRole = 'host';
+          gameMode = 'online';
+          document.getElementById('wait-status').textContent = '接続完了！ゲームを開始します...';
+          setTimeout(startOnlineGame, 500);
+        }
+      });
+      conn.on('data', onDataFromGuest);
+      conn.on('close', scheduleDisconnect);
+      conn.on('error', e => console.warn('conn error', e));
+    });
+
+    peer.on('error', (err) => {
+      if (err.type === 'unavailable-id') {
+        // コードが使用中 → 別のコードで再試行
+        try { peer.destroy(); } catch(e) {}
+        tryCode();
       } else {
-        myRole = 'host';
-        gameMode = 'online';
-        document.getElementById('wait-status').textContent = '接続完了！ゲームを開始します...';
-        setTimeout(startOnlineGame, 500);
+        document.getElementById('wait-status').textContent = 'エラー: ' + err.type;
       }
     });
-    conn.on('data', onDataFromGuest);
-    conn.on('close', scheduleDisconnect);
-    conn.on('error', e => console.warn('conn error', e));
-  });
+  }
 
-  peer.on('error', (err) => {
-    document.getElementById('wait-status').textContent = 'エラー: ' + err.type;
-  });
+  tryCode();
 }
 
 function copyURL() {
@@ -1694,13 +1704,16 @@ function copyURL() {
 }
 
 // ===== Guest flow =====
-function connectToHost(code, fromUrl = false) {
-  code = code || document.getElementById('code-input').value.trim().toUpperCase();
-  if (!code) {
+function connectToHost(rawCode, fromUrl = false) {
+  // 数字のみ抽出・3桁ゼロ埋め
+  const digits = (rawCode || document.getElementById('code-input').value).replace(/\D/g, '');
+  if (!digits) {
     document.getElementById('join-status').textContent = 'コードを入力してください';
     return;
   }
-  lastHostCode = code;
+  const code = digits.padStart(3, '0');
+  const peerId = 'bl-' + code;
+  lastHostCode = peerId;
 
   document.getElementById('conn-status').textContent = 'ホストに接続中...';
   showScreen('scr-connecting');
@@ -1710,7 +1723,7 @@ function connectToHost(code, fromUrl = false) {
 
   peer.on('open', () => {
     document.getElementById('conn-status').textContent = 'ピアに接続中...';
-    conn = peer.connect(code, { reliable: true });
+    conn = peer.connect(peerId, { reliable: true });
 
     conn.on('open', () => {
       myRole = 'guest';
