@@ -220,6 +220,7 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
 }
 .fmark.pw { background: rgba(52,152,219,0.45); border-color: #3498db; }
 .fmark.aw { background: rgba(231,76,60,0.45); border-color: #e74c3c; }
+@keyframes flagPulse { from { border-color: rgba(255,215,0,0.4); } to { border-color: gold; box-shadow: 0 0 8px gold; } }
 
 .fnum { position: absolute; bottom: 1px; right: 3px; font-size: 0.38em; opacity: 0.48; }
 
@@ -777,8 +778,14 @@ function rFlags() {
     if (flag.a.length === 3) { const f = evForm(flag.a); aiLbl.textContent = f ? FN[f.t] : ''; }
     aiBlk.appendChild(aiLbl);
 
-    // Flag marker
+    // Flag marker — also clickable as shortcut when a card is selected
+    const canPlayFlag = G.myTurn && !flag.w && flag.p.length < 3 && sel && !G.over;
     const fm = document.createElement('div'); fm.className = 'fmark';
+    if (canPlayFlag) {
+      fm.classList.add('slot', 'open');
+      fm.style.cssText = 'cursor:pointer;animation:flagPulse 0.8s infinite alternate;';
+      fm.onclick = () => playCard(fi);
+    }
     const ico = document.createElement('span');
     if (flag.w === 'p') { fm.classList.add('pw'); ico.textContent = '🔵'; }
     else if (flag.w === 'a') { fm.classList.add('aw'); ico.textContent = '🔴'; }
@@ -795,11 +802,13 @@ function rFlags() {
 
     const canPlay = G.myTurn && !flag.w && flag.p.length < 3 && sel && !G.over;
     for (let j = 0; j < 3; j++) {
-      const idx = flag.p.length - 1 - j;
-      if (idx >= 0) pBlk.appendChild(mkCardEl(flag.p[idx]));
-      else if (j === (2 - flag.p.length) + 1 && canPlay)
+      if (j < flag.p.length) {
+        pBlk.appendChild(mkCardEl(flag.p[j]));
+      } else if (j === flag.p.length && canPlay) {
         pBlk.appendChild(mkSlotEl(true, () => playCard(fi)));
-      else pBlk.appendChild(mkSlotEl(false));
+      } else {
+        pBlk.appendChild(mkSlotEl(false));
+      }
     }
 
     col.appendChild(aiBlk); col.appendChild(fm); col.appendChild(pBlk);
