@@ -4,538 +4,1398 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>バトルライン</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Noto+Serif+JP:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-[hidden] { display: none !important; }
+/* ══════════════════════════════════════════
+   VARIABLES
+══════════════════════════════════════════ */
+:root {
+  --parchment:    #F0E6CC;
+  --parchment-dk: #E0D0AA;
+  --surface:      #EDE0C0;
+  --surface-dk:   #D8C898;
+  --ink:          #2A2318;
+  --ink-mid:      #4A3E2C;
+  --ink-faint:    #8A7A5A;
+  --crimson:      #7A2020;
+  --army:         #2E4A30;
+  --army-dk:      #1E3220;
+  --brass:        #A8842A;
+  --brass-lt:     #C9A550;
+  --c-red:    #A03030;
+  --c-blue:   #2A4A7A;
+  --c-green:  #2E6040;
+  --c-yellow: #9A7018;
+  --c-orange: #8A4018;
+  --c-purple: #5A3068;
+}
 
+/* ══════════════════════════════════════════
+   RESET
+══════════════════════════════════════════ */
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+* { touch-action: manipulation; }
+
+/* ══════════════════════════════════════════
+   BODY — dark outer frame
+══════════════════════════════════════════ */
 body {
-  background: linear-gradient(160deg, #1a4a2a 0%, #0d2d18 100%);
-  font-family: 'Segoe UI', Arial, sans-serif;
-  color: #fff;
+  font-family: 'Noto Serif JP', serif;
+  background: #1A1610;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 4px;
-  gap: 6px;
+  padding: 24px 12px 40px;
   user-select: none;
+  color: var(--ink);
 }
 
-h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0.6); margin-top: 2px; }
-
-/* ===== SCREENS ===== */
-.screen { width: 100%; max-width: 840px; }
-
-/* Menu */
-#scr-menu {
+/* ══════════════════════════════════════════
+   SCREENS — lobby (parchment card style)
+══════════════════════════════════════════ */
+.screen {
+  width: 100%;
+  max-width: 420px;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+/* Lobby screens get the parchment card treatment */
+#scr-profile, #scr-menu, #scr-waiting, #scr-join, #scr-connecting {
+  background: var(--parchment);
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0, transparent 31px,
+    rgba(160,130,60,.05) 31px, rgba(160,130,60,.05) 32px
+  );
+  border-radius: 24px;
+  padding: 24px 24px 32px;
+  box-shadow:
+    0 0 0 1px rgba(201,165,80,.3),
+    0 0 0 3px rgba(42,35,24,.8),
+    0 30px 80px rgba(0,0,0,.6);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Inner decorative border */
+#scr-profile::before, #scr-menu::before, #scr-waiting::before,
+#scr-join::before, #scr-connecting::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(168,132,42,.18);
+  border-radius: 16px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Game screen: full-width dark battlefield */
+#scr-game {
+  max-width: none;
+  width: 100%;
+  background: var(--army-dk);
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0, transparent 39px,
+    rgba(0,0,0,.08) 39px, rgba(0,0,0,.08) 40px
+  );
+  border-radius: 0;
+  padding: 0;
+  min-height: 100vh;
+  gap: 0;
+  box-shadow: none;
+}
+
+/* ══════════════════════════════════════════
+   DECORATIVE ELEMENTS
+══════════════════════════════════════════ */
+.hr-deco {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+.hr-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--brass), transparent); }
+.hr-gem  { width: 5px; height: 5px; background: var(--brass); transform: rotate(45deg); flex-shrink: 0; }
+
+/* ══════════════════════════════════════════
+   SCREEN HEADER (rules button row)
+══════════════════════════════════════════ */
+.scr-header {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 2;
+}
+.rules-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--brass);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 8.5px;
+  font-weight: 600;
+  color: var(--brass);
+  letter-spacing: .14em;
+  cursor: pointer;
+  transition: all .18s;
+}
+.rules-btn:hover { background: var(--brass); color: var(--parchment); }
+.rules-btn svg   { width: 10px; height: 10px; flex-shrink: 0; }
+
+/* ══════════════════════════════════════════
+   LOGO AREA
+══════════════════════════════════════════ */
+.logo-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  position: relative;
+  z-index: 1;
+}
+.logo-eyebrow {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--brass);
+  letter-spacing: .3em;
+  margin: 6px 0 4px;
+  opacity: .85;
+}
+.logo-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: .05em;
+  line-height: 1;
+}
+.logo-jp {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 10px;
+  font-weight: 300;
+  color: var(--ink-faint);
+  letter-spacing: .26em;
+  margin-top: 4px;
+}
+
+/* Mini flags row */
+.flags-deco {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 14px;
+  padding-bottom: 8px;
+  position: relative;
+}
+.flags-deco::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 5%; right: 5%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent, var(--ink-mid), transparent);
+}
+.fdg { display: flex; flex-direction: column; align-items: center; }
+.fdg-p { width: 0; height: 0; border-style: solid; }
+.fdg-s { width: 1.5px; background: var(--ink-mid); }
+.fdg-d { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-mid); margin-top: -1px; }
+.fdg:nth-child(1) .fdg-p { border-width: 7px 9px 0 0; border-color: var(--c-red) transparent transparent transparent; }
+.fdg:nth-child(1) .fdg-s { height: 16px; }
+.fdg:nth-child(2) .fdg-p { border-width: 8px 10px 0 0; border-color: var(--c-green) transparent transparent transparent; }
+.fdg:nth-child(2) .fdg-s { height: 20px; }
+.fdg:nth-child(3) .fdg-p { border-width: 7px 9px 0 0; border-color: var(--c-blue) transparent transparent transparent; }
+.fdg:nth-child(3) .fdg-s { height: 17px; }
+.fdg:nth-child(4) .fdg-p { border-width: 9px 11px 0 0; border-color: var(--c-yellow) transparent transparent transparent; }
+.fdg:nth-child(4) .fdg-s { height: 24px; }
+.fdg:nth-child(5) .fdg-p { border-width: 11px 13px 0 0; border-color: var(--ink-mid) transparent transparent transparent; }
+.fdg:nth-child(5) .fdg-s { height: 28px; }
+.fdg:nth-child(6) .fdg-p { border-width: 9px 11px 0 0; border-color: var(--c-purple) transparent transparent transparent; }
+.fdg:nth-child(6) .fdg-s { height: 23px; }
+.fdg:nth-child(7) .fdg-p { border-width: 7px 9px 0 0; border-color: var(--c-orange) transparent transparent transparent; }
+.fdg:nth-child(7) .fdg-s { height: 18px; }
+.fdg:nth-child(8) .fdg-p { border-width: 8px 10px 0 0; border-color: var(--c-red) transparent transparent transparent; }
+.fdg:nth-child(8) .fdg-s { height: 21px; }
+.fdg:nth-child(9) .fdg-p { border-width: 7px 9px 0 0; border-color: var(--c-green) transparent transparent transparent; }
+.fdg:nth-child(9) .fdg-s { height: 15px; }
+
+/* ══════════════════════════════════════════
+   COMMANDER CARD (profile display)
+══════════════════════════════════════════ */
+.cmd-card {
+  width: 100%;
+  margin-top: 18px;
+  background: var(--surface);
+  border: 1px solid var(--parchment-dk);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 2px 6px rgba(42,35,24,.12);
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+.cmd-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--crimson), var(--brass-lt), var(--army));
+}
+.cmd-shield { width: 36px; height: 40px; flex-shrink: 0; }
+.cmd-info   { flex: 1; min-width: 0; }
+.cmd-rank {
+  font-family: 'Cinzel', serif;
+  font-size: 7px;
+  font-weight: 600;
+  color: var(--brass);
+  letter-spacing: .2em;
+}
+.cmd-name {
+  font-family: 'Crimson Pro', serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.cmd-rec { display: flex; gap: 8px; margin-top: 5px; align-items: center; }
+.rec-item { display: flex; align-items: baseline; gap: 2px; }
+.rec-n { font-family: 'Cinzel', serif; font-size: 13px; font-weight: 700; }
+.rec-n.w { color: var(--army); }
+.rec-n.l { color: var(--crimson); }
+.rec-n.d { color: var(--brass); }
+.rec-l   { font-size: 7px; color: var(--ink-faint); letter-spacing: .08em; }
+.rec-sep { width: 1px; height: 12px; background: var(--parchment-dk); }
+.btn-ren {
+  background: transparent;
+  border: 1px solid var(--parchment-dk);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: all .18s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-ren:hover { border-color: var(--brass); color: var(--brass); }
+
+/* ══════════════════════════════════════════
+   SECTION LABEL (menu dividers)
+══════════════════════════════════════════ */
+.sec-label {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  margin-bottom: 4px;
+  position: relative;
+  z-index: 1;
+}
+.sec-bar { flex: 1; height: 1px; background: var(--parchment-dk); }
+.sec-txt {
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  letter-spacing: .2em;
+  white-space: nowrap;
+}
+.sec-gem { width: 4px; height: 4px; background: var(--brass); transform: rotate(45deg); flex-shrink: 0; }
+
+/* ══════════════════════════════════════════
+   MENU ACTION BUTTONS
+══════════════════════════════════════════ */
+.menu-btn {
+  width: 100%;
+  margin-top: 9px;
+  background: var(--surface);
+  border: 1px solid var(--parchment-dk);
+  border-radius: 10px;
+  padding: 0;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    0 2px 0 rgba(42,35,24,.14),
+    0 4px 10px rgba(42,35,24,.08);
+  transition: transform .14s, box-shadow .14s;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+.menu-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    0 4px 0 rgba(42,35,24,.14),
+    0 10px 22px rgba(42,35,24,.16);
+}
+.menu-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 1px 0 rgba(42,35,24,.1);
+}
+/* Left color accent */
+.menu-btn::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  border-radius: 10px 0 0 10px;
+}
+.menu-btn-cpu::before  { background: linear-gradient(180deg, #5A5040, var(--ink)); }
+.menu-btn-host::before { background: linear-gradient(180deg, #5A8A5A, var(--army)); }
+.menu-btn-join::before { background: linear-gradient(180deg, #C05050, var(--crimson)); }
+
+.menu-btn-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 14px 14px 20px;
+}
+.menu-btn-ico {
+  width: 42px; height: 42px;
+  border-radius: 7px;
+  border: 1px solid rgba(0,0,0,.07);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.menu-btn-ico svg { width: 22px; height: 22px; }
+.menu-btn-cpu  .menu-btn-ico { background: rgba(42,35,24,.07); color: var(--ink-mid); }
+.menu-btn-host .menu-btn-ico { background: rgba(46,74,48,.08); color: var(--army); }
+.menu-btn-join .menu-btn-ico { background: rgba(122,32,32,.07); color: var(--crimson); }
+
+.menu-btn-txts { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.menu-btn-ja {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: .02em;
+}
+.menu-btn-en {
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--brass);
+  letter-spacing: .16em;
+  opacity: .75;
+}
+.menu-btn-chev { width: 18px; height: 18px; flex-shrink: 0; color: var(--parchment-dk); }
+
+/* ══════════════════════════════════════════
+   PROFILE SCREEN
+══════════════════════════════════════════ */
+.profile-logo {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 14px 0 4px;
+  position: relative;
+  z-index: 1;
+}
+.profile-logo-jp {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 9px;
+  font-weight: 300;
+  color: var(--ink-faint);
+  letter-spacing: .24em;
+  position: relative;
+  z-index: 1;
+}
+.profile-title {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: .2em;
+  margin-top: 22px;
+  margin-bottom: 4px;
+  position: relative;
+  z-index: 1;
+}
+.profile-sub {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 10px;
+  color: var(--ink-faint);
+  letter-spacing: .04em;
+  text-align: center;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 1;
+}
+#profile-name-input {
+  width: 100%;
+  max-width: 300px;
+  background: var(--surface);
+  border: 1.5px solid var(--parchment-dk);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 1.05em;
+  font-family: 'Noto Serif JP', serif;
+  padding: 13px 16px;
+  text-align: center;
+  outline: none;
+  transition: border-color .18s;
+  position: relative;
+  z-index: 1;
+}
+#profile-name-input:focus { border-color: var(--brass); }
+#profile-name-input::placeholder { color: var(--ink-faint); opacity: .6; }
+.btn-start {
+  width: 100%;
+  max-width: 300px;
+  margin-top: 10px;
+  background: var(--army);
+  border: none;
+  border-radius: 8px;
+  padding: 14px 0;
+  font-family: 'Cinzel', serif;
+  font-size: .88em;
+  font-weight: 700;
+  letter-spacing: .18em;
+  color: var(--parchment);
+  cursor: pointer;
+  transition: background .18s, transform .14s;
+  box-shadow: 0 3px 0 var(--army-dk), 0 6px 16px rgba(0,0,0,.25);
+  position: relative;
+  z-index: 1;
+}
+.btn-start:hover  { background: #3A5A3C; transform: translateY(-2px); }
+.btn-start:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--army-dk); }
+.profile-note {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 9px;
+  color: var(--ink-faint);
+  text-align: center;
+  margin-top: 12px;
+  line-height: 1.7;
+  position: relative;
+  z-index: 1;
+}
+
+/* ══════════════════════════════════════════
+   WAITING / JOIN / CONNECTING screens
+══════════════════════════════════════════ */
+#scr-waiting, #scr-join, #scr-connecting {
   justify-content: center;
   min-height: 60vh;
-  gap: 16px;
-}
-
-#scr-menu h1 { font-size: 2em; margin-bottom: 20px; }
-
-.btn-big {
-  background: rgba(255,255,255,0.12);
-  border: 2px solid rgba(255,255,255,0.3);
-  color: #fff;
-  font-size: 1.1em;
-  padding: 14px 40px;
-  border-radius: 10px;
-  cursor: pointer;
-  width: 260px;
-  transition: background 0.15s, border-color 0.15s;
-}
-.btn-big:hover { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.6); }
-.btn-big.gold { border-color: #ffd700; background: rgba(255,215,0,0.12); }
-.btn-big.gold:hover { background: rgba(255,215,0,0.22); }
-
-.menu-divider { width: 240px; border: none; border-top: 1px solid rgba(255,255,255,0.15); }
-
-/* Waiting / Join / Connecting screens */
-#scr-waiting, #scr-join, #scr-connecting {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 70vh;
   gap: 14px;
   text-align: center;
 }
-
-#scr-waiting h2, #scr-join h2 { font-size: 1.4em; margin-bottom: 6px; }
-
-.room-code-box {
-  font-size: 2.5em;
-  font-weight: bold;
-  letter-spacing: 8px;
-  color: #ffd700;
-  background: rgba(0,0,0,0.4);
-  padding: 14px 30px;
-  border-radius: 10px;
-  border: 2px solid #ffd700;
-  font-family: monospace;
+.lobby-title {
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: .12em;
+  position: relative;
+  z-index: 1;
 }
-
+.lobby-sub {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  position: relative;
+  z-index: 1;
+}
+.lobby-warn {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 10.5px;
+  color: var(--crimson);
+  min-height: 1.2em;
+  position: relative;
+  z-index: 1;
+}
+.room-code-box {
+  font-family: 'Cinzel', serif;
+  font-size: 2em;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: var(--ink);
+  background: var(--surface);
+  padding: 14px 24px;
+  border-radius: 10px;
+  border: 1.5px solid var(--brass);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 2px 8px rgba(42,35,24,.1);
+  position: relative;
+  z-index: 1;
+}
 .url-row {
   display: flex;
   gap: 6px;
-  align-items: center;
   width: 100%;
-  max-width: 440px;
+  max-width: 380px;
+  position: relative;
+  z-index: 1;
 }
-
-.url-row input {
+#room-url-input {
   flex: 1;
-  background: rgba(0,0,0,0.35);
-  border: 1.5px solid rgba(255,255,255,0.25);
-  color: #ccc;
-  font-size: 0.72em;
+  background: var(--surface);
+  border: 1px solid var(--parchment-dk);
+  border-radius: 6px;
+  color: var(--ink-faint);
+  font-size: .72em;
   padding: 8px 10px;
-  border-radius: 7px;
   outline: none;
+  font-family: 'Noto Serif JP', serif;
 }
-
-.btn-sm {
-  background: rgba(255,215,0,0.15);
-  border: 1.5px solid #ffd700;
-  color: #ffd700;
-  padding: 8px 14px;
-  border-radius: 7px;
-  cursor: pointer;
-  font-size: 0.82em;
-  white-space: nowrap;
-}
-.btn-sm:hover { background: rgba(255,215,0,0.28); }
-
 .code-input-wrap {
   display: flex;
   gap: 8px;
   align-items: center;
+  position: relative;
+  z-index: 1;
 }
-
 #code-input {
-  background: rgba(0,0,0,0.4);
-  border: 2px solid rgba(255,255,255,0.3);
-  color: #fff;
-  font-size: 1.4em;
-  padding: 10px 16px;
+  background: var(--surface);
+  border: 2px solid var(--parchment-dk);
   border-radius: 8px;
+  color: var(--ink);
+  font-size: 1.35em;
+  padding: 10px 14px;
   letter-spacing: 4px;
   text-transform: uppercase;
-  width: 200px;
+  width: 190px;
   outline: none;
   text-align: center;
-  font-family: monospace;
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  transition: border-color .18s;
 }
-#code-input:focus { border-color: #ffd700; }
-
-.status-text { font-size: 0.88em; opacity: 0.7; }
-.status-text.warn { color: #ffd700; opacity: 1; }
-
+#code-input:focus { border-color: var(--brass); }
+.btn-sm {
+  background: var(--surface-dk);
+  border: 1.5px solid var(--brass);
+  border-radius: 6px;
+  color: var(--brass);
+  padding: 9px 18px;
+  font-family: 'Cinzel', serif;
+  font-size: .8em;
+  font-weight: 600;
+  letter-spacing: .12em;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+.btn-sm:hover { background: var(--brass); color: var(--parchment); }
 .spinner {
-  width: 36px; height: 36px;
-  border: 4px solid rgba(255,255,255,0.15);
-  border-top-color: #ffd700;
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(168,132,42,.2);
+  border-top-color: var(--brass);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto;
+  animation: spin .8s linear infinite;
+  position: relative;
+  z-index: 1;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ===== GAME ===== */
-#scr-game {
+/* ══════════════════════════════════════════
+   MENU FOOTER
+══════════════════════════════════════════ */
+.menu-footer {
+  margin-top: 22px;
+  width: 100%;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+.footer-tokens { display: flex; gap: 5px; align-items: center; }
+.ft { width: 9px; height: 9px; border-radius: 2px; border: 1px solid rgba(42,35,24,.1); }
+.footer-note {
+  font-family: 'Cinzel', serif;
+  font-size: 7px;
+  color: var(--ink-faint);
+  letter-spacing: .14em;
+  opacity: .55;
 }
 
+/* Toast */
+.menu-toast {
+  width: 100%;
+  max-width: 100%;
+  background: rgba(122,32,32,.08);
+  border: 1px solid rgba(122,32,32,.25);
+  border-radius: 8px;
+  padding: 9px 14px;
+  color: var(--crimson);
+  font-family: 'Noto Serif JP', serif;
+  font-size: .82em;
+  text-align: center;
+  margin-top: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ══════════════════════════════════════════
+   GAME SCREEN — info bar
+══════════════════════════════════════════ */
 #info-bar {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
   justify-content: center;
-  font-size: 0.78em;
+  padding: 8px 10px;
+  background: rgba(26,22,16,.75);
+  border-bottom: 1px solid rgba(168,132,42,.18);
 }
-
 .chip {
-  background: rgba(0,0,0,0.38);
-  padding: 3px 11px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,.32);
+  border: 1px solid rgba(168,132,42,.18);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-family: 'Noto Serif JP', serif;
+  font-size: .74em;
+  color: var(--parchment);
+}
+#msg {
+  color: var(--brass-lt);
+  font-family: 'Cinzel', serif;
+  font-size: .7em;
+  font-weight: 600;
+  letter-spacing: .08em;
+  border-color: rgba(201,165,80,.25);
+}
+.exit-btn {
+  background: rgba(122,32,32,.25);
+  border: 1px solid rgba(122,32,32,.45);
+  border-radius: 20px;
+  padding: 3px 10px;
+  color: #e08888;
+  font-family: 'Cinzel', serif;
+  font-size: .7em;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: background .15s;
+}
+.exit-btn:hover { background: rgba(122,32,32,.5); color: #ffaaaa; }
+
+/* ══════════════════════════════════════════
+   GAME — hand labels
+══════════════════════════════════════════ */
+.opp-area, .player-area {
+  width: 100%;
+  padding: 4px 8px 2px;
+}
+.hand-label {
+  font-family: 'Cinzel', serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--brass);
+  letter-spacing: .22em;
+  opacity: .75;
+  margin-bottom: 4px;
 }
 
-#msg { color: #ffd700; font-weight: bold; }
-
-.sec-lbl { font-size: 0.68em; opacity: 0.55; padding-left: 2px; }
-
-#ai-hand { display: flex; gap: 3px; flex-wrap: wrap; min-height: 54px; align-items: center; }
-
+/* ══════════════════════════════════════════
+   GAME — AI hand (card backs)
+══════════════════════════════════════════ */
+#ai-hand {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  min-height: 52px;
+  align-items: center;
+  padding: 2px 0;
+}
 .card-back {
-  width: 36px; height: 52px;
-  background: repeating-linear-gradient(45deg,#1e3045,#1e3045 4px,#263b52 4px,#263b52 8px);
-  border: 2px solid #4a6a8a;
+  width: 32px;
+  height: 48px;
+  background: var(--army);
+  border: 1.5px solid rgba(201,165,80,.45);
   border-radius: 5px;
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+.card-back::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: .5px solid rgba(201,165,80,.2);
+  border-radius: 3px;
+}
+.card-back::after {
+  content: '✦';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 9px;
+  color: rgba(201,165,80,.28);
 }
 
-#flags-wrap { overflow-x: auto; padding-bottom: 2px; }
-#flags-row { display: flex; gap: 4px; min-width: 520px; }
+/* ══════════════════════════════════════════
+   GAME — flags layout
+══════════════════════════════════════════ */
+#flags-wrap { overflow-x: auto; width: 100%; padding: 4px 6px 4px; }
+#flags-row  { display: flex; gap: 5px; min-width: 500px; }
 
 .fcol {
-  flex: 1; min-width: 52px; max-width: 82px;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  flex: 1;
+  min-width: 50px;
+  max-width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
-
 .form-block { display: flex; flex-direction: column; gap: 2px; width: 100%; }
 
-.slot {
-  width: 100%; height: 54px;
-  border-radius: 5px;
-  border: 1.5px dashed rgba(255,255,255,0.12);
-  flex-shrink: 0;
+.flbl {
+  font-family: 'Cinzel', serif;
+  font-size: .42em;
+  color: var(--brass-lt);
+  min-height: 10px;
+  text-align: center;
+  line-height: 1.1;
+  letter-spacing: .04em;
 }
 
-.slot.open {
-  border-color: rgba(255,215,0,0.55);
-  background: rgba(255,215,0,0.06);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.15em; color: rgba(255,215,0,0.65);
-  transition: background 0.12s, border-color 0.12s;
-}
-.slot.open:hover { border-color: gold; background: rgba(255,215,0,0.18); color: gold; }
-
+/* ══════════════════════════════════════════
+   GAME — flag marker
+══════════════════════════════════════════ */
 .fmark {
-  width: 42px; height: 33px;
-  background: rgba(0,0,0,0.32);
-  border: 2px solid rgba(255,255,255,0.18);
+  width: 44px;
+  height: 32px;
+  background: rgba(42,35,24,.55);
+  border: 1.5px solid rgba(168,132,42,.28);
   border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.05em; flex-shrink: 0; position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  font-size: 1em;
+  transition: box-shadow .15s;
 }
-.fmark.pw { background: rgba(52,152,219,0.45); border-color: #3498db; }
-.fmark.aw { background: rgba(231,76,60,0.45); border-color: #e74c3c; }
-@keyframes flagPulse { from { border-color: rgba(255,215,0,0.4); } to { border-color: gold; box-shadow: 0 0 8px gold; } }
+.fmark.pw { background: rgba(42,100,180,.4); border-color: #5090d0; }
+.fmark.aw { background: rgba(180,50,40,.4);  border-color: #c05848; }
+@keyframes flagPulse {
+  from { border-color: rgba(201,165,80,.35); }
+  to   { border-color: var(--brass-lt); box-shadow: 0 0 8px rgba(201,165,80,.5); }
+}
+.fnum {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-family: 'Cinzel', serif;
+  font-size: .34em;
+  color: var(--parchment);
+  opacity: .45;
+}
 
-.fnum { position: absolute; bottom: 1px; right: 3px; font-size: 0.38em; opacity: 0.48; }
-
-.flbl { font-size: 0.47em; color: #ffd700; min-height: 11px; text-align: center; line-height: 1; }
-
-.card {
-  width: 100%; height: 54px;
+/* ══════════════════════════════════════════
+   GAME — card slots
+══════════════════════════════════════════ */
+.slot {
+  width: 100%;
+  height: 52px;
   border-radius: 5px;
-  border: 2px solid rgba(255,255,255,0.22);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-weight: bold;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.38);
+  border: 1px dashed rgba(168,132,42,.2);
+  background: rgba(0,0,0,.12);
   flex-shrink: 0;
 }
+.slot.open {
+  border-color: rgba(201,165,80,.55);
+  background: rgba(201,165,80,.05);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 1.1em;
+  color: rgba(201,165,80,.6);
+  transition: background .12s, border-color .12s;
+}
+.slot.open:hover { border-color: var(--brass-lt); background: rgba(201,165,80,.14); color: var(--brass-lt); }
 
-.cv { font-size: 1.18em; line-height: 1; }
-.cs { font-size: 0.44em; opacity: 0.88; margin-top: 1px; }
+/* ══════════════════════════════════════════
+   GAME — parchment cards
+══════════════════════════════════════════ */
+.card {
+  width: 100%;
+  height: 52px;
+  border-radius: 5px;
+  background: #F5EDD5;
+  border: 1.5px solid rgba(168,132,42,.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.7);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  transition: transform .1s, box-shadow .1s;
+}
+/* Colored top stripe */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.card.red    { --cc: var(--c-red); }
+.card.blue   { --cc: var(--c-blue); }
+.card.green  { --cc: var(--c-green); }
+.card.yellow { --cc: var(--c-yellow); }
+.card.orange { --cc: var(--c-orange); }
+.card.purple { --cc: var(--c-purple); }
+.card::before { background: var(--cc, var(--ink-faint)); }
 
-.card.hc { width: 58px; height: 83px; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; }
-.card.hc:hover { transform: translateY(-8px); box-shadow: 0 8px 14px rgba(0,0,0,0.45); }
+.cv {
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 1.25em;
+  font-weight: 600;
+  color: var(--cc, var(--ink));
+  line-height: 1;
+}
+.cs {
+  font-family: 'Cinzel', serif;
+  font-size: .38em;
+  color: var(--cc, var(--ink-faint));
+  opacity: .75;
+  letter-spacing: .05em;
+  margin-top: 1px;
+}
+
+/* Hand cards */
+.card.hc {
+  width: 56px;
+  height: 80px;
+  cursor: pointer;
+  border: 1.5px solid rgba(168,132,42,.25);
+}
+.card.hc:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 10px 20px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.7);
+}
 .card.hc.sel {
-  transform: translateY(-14px);
-  border-color: #ffd700;
-  box-shadow: 0 0 14px #ffd700, 0 8px 16px rgba(0,0,0,0.5);
+  transform: translateY(-16px);
+  border-color: var(--brass-lt);
+  box-shadow: 0 0 12px rgba(201,165,80,.55), 0 12px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.7);
 }
+.card.hc .cv { font-size: 1.7em; }
+.card.hc .cs { font-size: .42em; }
 
-.red    { background: linear-gradient(150deg,#e74c3c,#c0392b); }
-.blue   { background: linear-gradient(150deg,#3498db,#2471a3); }
-.green  { background: linear-gradient(150deg,#27ae60,#1e8449); }
-.yellow { background: linear-gradient(150deg,#f1c40f,#d4ac0d); color: #333; }
-.orange { background: linear-gradient(150deg,#e67e22,#ca6f1e); }
-.purple { background: linear-gradient(150deg,#9b59b6,#7d3c98); }
+/* Highlights */
+@keyframes lastP { 0%,100% { box-shadow: 0 0 12px rgba(51,170,255,.9), 0 1px 4px rgba(0,0,0,.2); } 50% { box-shadow: 0 0 20px rgba(51,170,255,.7), 0 1px 4px rgba(0,0,0,.2); } }
+@keyframes lastA { 0%,100% { box-shadow: 0 0 12px rgba(255,100,60,.9), 0 1px 4px rgba(0,0,0,.2); } 50% { box-shadow: 0 0 20px rgba(255,100,60,.7), 0 1px 4px rgba(0,0,0,.2); } }
+.card.last-p { border-color: #3af !important; animation: lastP .7s ease infinite; }
+.card.last-a { border-color: #f64 !important; animation: lastA .7s ease infinite; }
 
+/* Player hand */
 #player-hand {
-  display: flex; gap: 5px; flex-wrap: wrap; justify-content: center;
-  min-height: 83px; align-items: flex-end;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-height: 80px;
+  align-items: flex-end;
+  padding: 2px 0;
+}
+#help-bar {
+  font-family: 'Noto Serif JP', serif;
+  font-size: .64em;
+  color: rgba(240,230,204,.35);
+  text-align: center;
+  padding: 6px 12px 10px;
 }
 
-#help-bar { font-size: 0.68em; opacity: 0.45; text-align: center; }
-
-/* ===== MOBILE ===== */
-* { touch-action: manipulation; }
-
-@media (max-width: 500px) {
-  body { padding: 4px 2px; gap: 4px; }
-  h1 { font-size: 0.95em; letter-spacing: 2px; }
-
-  /* Info bar */
-  #info-bar { gap: 4px; font-size: 0.7em; }
-  .chip { padding: 2px 7px; }
-
-  /* AI hand backs */
-  .card-back { width: 22px; height: 32px; border-width: 1px; }
-  #ai-hand { gap: 2px; min-height: 36px; }
-
-  /* Formation cards */
-  .slot { height: 36px; }
-  .card { height: 36px; border-width: 1.5px; }
-  .cv { font-size: 0.82em; }
-  .cs { font-size: 0.32em; }
-  .flbl { font-size: 0.32em; min-height: 9px; }
-
-  /* Flag marker */
-  .fmark { width: 26px; height: 22px; font-size: 0.75em; border-width: 1.5px; }
-  .fnum { font-size: 0.28em; }
-
-  /* Flags layout */
-  #flags-row { gap: 2px; min-width: 0; }
-  .fcol { min-width: 0; gap: 1px; }
-  .form-block { gap: 1px; }
-
-  /* Hand cards — larger touch targets */
-  .card.hc { width: 44px; height: 62px; }
-  .card.hc:hover { transform: none; }
-  .card.hc.sel { transform: translateY(-10px); }
-  #player-hand { gap: 4px; min-height: 62px; }
-
-  /* Screens */
-  .btn-big { width: 220px; font-size: 0.95em; padding: 12px 24px; }
-  .room-code-box { font-size: 1.8em; letter-spacing: 5px; padding: 10px 20px; }
-  .url-row { max-width: 100%; }
-  #code-input { font-size: 1.1em; width: 160px; }
-
-  /* Hide decorative help text */
-  #help-bar { display: none; }
-  .sec-lbl { font-size: 0.6em; }
-  .opp-label { font-size: 0.6em; }
-
-  /* ルールボタンは右上に固定。h1に padding-right を付けて重ならないようにする */
-  .rules-btn { top: 8px; bottom: auto; right: 10px; font-size: 0.75em; padding: 5px 10px; }
-  h1 { padding-right: 95px; }
-  #scr-menu h1 { font-size: 1.3em; margin-bottom: 12px; padding-right: 95px; }
-}
-
-/* Overlay */
+/* ══════════════════════════════════════════
+   GAME OVER OVERLAY
+══════════════════════════════════════════ */
 #overlay {
-  display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,0.72); z-index: 99;
-  align-items: center; justify-content: center;
+  position: fixed;
+  inset: 0;
+  background: rgba(26,22,16,.88);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
 }
 #overlay.on { display: flex; }
 #ov-box {
-  background: #152a1e; border: 3px solid #ffd700;
-  border-radius: 14px; padding: 30px 48px; text-align: center; max-width: 340px;
+  background: var(--surface);
+  border: 2px solid var(--brass);
+  border-radius: 18px;
+  padding: 40px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  text-align: center;
+  box-shadow:
+    0 0 0 1px var(--parchment-dk),
+    0 0 60px rgba(168,132,42,.15),
+    0 30px 80px rgba(0,0,0,.6);
+  max-width: 90vw;
 }
-#ov-msg { font-size: 1.35em; line-height: 1.65; margin-bottom: 20px; white-space: pre-line; }
-#ov-box button {
-  background: #ffd700; color: #222; border: none;
-  padding: 10px 30px; border-radius: 8px; font-size: 1em; font-weight: bold; cursor: pointer;
+#ov-msg {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 1.25em;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: pre-line;
+  line-height: 1.5;
 }
-#ov-box button:hover { background: #ffe94d; }
+#ov-btn {
+  background: var(--army);
+  border: none;
+  border-radius: 8px;
+  padding: 12px 32px;
+  font-family: 'Cinzel', serif;
+  font-size: .85em;
+  font-weight: 700;
+  letter-spacing: .18em;
+  color: var(--parchment);
+  cursor: pointer;
+  transition: background .18s, transform .14s;
+  box-shadow: 0 3px 0 var(--army-dk), 0 6px 16px rgba(0,0,0,.25);
+}
+#ov-btn:hover  { background: #3A5A3C; transform: translateY(-2px); }
+#ov-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--army-dk); }
 
-.opp-label { font-size: 0.7em; opacity: 0.6; text-align: center; }
-
-/* 最後に置いたカードのハイライト */
-.card.last-p {
-  border-color: #3af !important;
-  box-shadow: 0 0 10px rgba(51,170,255,0.8), 0 2px 5px rgba(0,0,0,0.4);
-  animation: lastP 0.6s ease-out;
-}
-.card.last-a {
-  border-color: #f64 !important;
-  box-shadow: 0 0 10px rgba(255,100,60,0.8), 0 2px 5px rgba(0,0,0,0.4);
-  animation: lastA 0.6s ease-out;
-}
-@keyframes lastP { from { box-shadow: 0 0 24px rgba(51,170,255,1); } to { box-shadow: 0 0 10px rgba(51,170,255,0.8); } }
-@keyframes lastA { from { box-shadow: 0 0 24px rgba(255,100,60,1);  } to { box-shadow: 0 0 10px rgba(255,100,60,0.8);  } }
-
-/* プロフィール画面 */
-#scr-profile {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; min-height: 70vh; gap: 14px; text-align: center;
-}
-#scr-profile h2 { font-size: 1.3em; }
-#profile-name-input {
-  background: rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.3);
-  color: #fff; font-size: 1.3em; padding: 10px 16px;
-  border-radius: 8px; outline: none; text-align: center; width: 240px;
-}
-#profile-name-input:focus { border-color: #ffd700; }
-
-/* ユーザーチップ（メニュー用） */
-#user-bar {
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(0,0,0,0.3); padding: 6px 14px;
-  border-radius: 12px; font-size: 0.8em; flex-wrap: wrap; justify-content: center;
-}
-#user-bar .uname { color: #ffd700; font-weight: bold; }
-#user-bar .stats-txt { opacity: 0.75; }
-
-/* 退出ボタン */
-.exit-btn {
-  background: rgba(200,50,50,0.2); border: 1.5px solid rgba(200,80,80,0.5);
-  color: #f88; font-size: 0.75em; padding: 4px 10px;
-  border-radius: 10px; cursor: pointer; transition: background 0.15s;
-}
-.exit-btn:hover { background: rgba(200,50,50,0.45); color: #fff; }
-
-/* ルールボタン */
-.rules-btn {
-  position: fixed; top: 10px; right: 12px; z-index: 50;
-  background: rgba(0,0,0,0.45); border: 1.5px solid rgba(255,255,255,0.3);
-  color: #fff; font-size: 0.82em; padding: 5px 12px;
-  border-radius: 20px; cursor: pointer;
-  transition: background 0.15s;
-}
-.rules-btn:hover { background: rgba(255,255,255,0.15); }
-
-/* ルール モーダル */
+/* ══════════════════════════════════════════
+   RULES MODAL
+══════════════════════════════════════════ */
 #rules-modal {
-  display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,0.75); z-index: 200;
-  align-items: center; justify-content: center;
-  padding: 12px;
+  position: fixed;
+  inset: 0;
+  background: rgba(26,22,16,.88);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 300;
+  padding: 16px;
+  overflow-y: auto;
 }
 #rules-modal.on { display: flex; }
-
 #rules-box {
-  background: #0f2a1a; border: 2px solid rgba(255,215,0,0.5);
-  border-radius: 14px; padding: 22px 24px; width: 100%;
-  max-width: 560px; max-height: 90vh; overflow-y: auto;
+  background: var(--parchment);
+  border: 2px solid var(--brass);
+  border-radius: 18px;
+  padding: 28px 22px;
+  max-width: 480px;
+  width: 100%;
   position: relative;
+  margin: auto;
+  box-shadow: 0 0 0 1px var(--parchment-dk), 0 20px 60px rgba(0,0,0,.55);
 }
-
+#rules-box h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 1.1em;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  letter-spacing: .12em;
+  margin-bottom: 18px;
+}
 .rules-close {
-  position: absolute; top: 12px; right: 14px;
-  background: none; border: none; color: rgba(255,255,255,0.5);
-  font-size: 1.1em; cursor: pointer; line-height: 1;
+  position: absolute;
+  top: 14px; right: 14px;
+  background: transparent;
+  border: 1px solid var(--parchment-dk);
+  border-radius: 50%;
+  width: 28px; height: 28px;
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-size: .85em;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
 }
-.rules-close:hover { color: #fff; }
-
-#rules-box h2 { font-size: 1.1em; text-align: center; margin-bottom: 18px; color: #ffd700; }
-#rules-box h3 { font-size: 0.9em; color: #ffd700; margin: 16px 0 8px; border-bottom: 1px solid rgba(255,215,0,0.2); padding-bottom: 4px; }
-
-.rule-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+.rules-close:hover { background: var(--surface-dk); color: var(--ink); }
+#rules-box section { margin-bottom: 16px; }
+#rules-box h3 {
+  font-family: 'Cinzel', serif;
+  font-size: .82em;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: .1em;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--parchment-dk);
+}
+.rule-cards { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .rule-card {
-  flex: 1; min-width: 130px; background: rgba(255,255,255,0.07);
-  border-radius: 8px; padding: 10px 12px; text-align: center; font-size: 0.82em;
+  background: var(--surface);
+  border: 1px solid var(--parchment-dk);
+  border-radius: 8px;
+  padding: 10px 14px;
+  text-align: center;
+  font-size: .82em;
+  display: flex; flex-direction: column; gap: 4px;
+  color: var(--ink);
 }
-.rule-icon { display: block; font-size: 1.2em; margin-bottom: 4px; }
-
-.rule-list { padding-left: 18px; font-size: 0.82em; line-height: 1.9; }
-
-/* フォーメーション表 */
-.formation-table { font-size: 0.78em; border-collapse: collapse; width: 100%; }
+.rule-icon { font-size: 1.2em; }
+.rule-list {
+  font-size: .8em;
+  color: var(--ink-mid);
+  padding-left: 18px;
+  display: flex; flex-direction: column; gap: 5px;
+  line-height: 1.55;
+}
+.rule-list li { letter-spacing: .01em; }
+.formation-table { border: 1px solid var(--parchment-dk); border-radius: 8px; overflow: hidden; }
 .ft-row {
-  display: grid; grid-template-columns: 28px 1fr 1.4fr auto;
-  gap: 6px; align-items: center;
-  padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,0.07);
+  display: grid;
+  grid-template-columns: 28px 1fr 1.2fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: .75em;
+  border-bottom: 1px solid var(--parchment-dk);
+  color: var(--ink-mid);
 }
-.ft-header { opacity: 0.45; font-size: 0.85em; padding-bottom: 4px; }
-.ft-rank { font-size: 1em; text-align: center; }
-.ft-name { font-weight: bold; }
-.ft-name.gold { color: #ffd700; }
-
+.ft-row:last-child { border-bottom: none; }
+.ft-header {
+  background: var(--surface-dk);
+  font-family: 'Cinzel', serif;
+  font-size: .68em;
+  font-weight: 600;
+  letter-spacing: .1em;
+  color: var(--ink-faint);
+}
+.ft-rank { font-family: 'Cinzel', serif; font-size: .85em; font-weight: 700; color: var(--ink-faint); }
+.ft-name { font-family: 'Cinzel', serif; font-size: .85em; font-weight: 600; color: var(--ink); }
+.ft-name.gold { color: var(--brass); }
 .ex-card {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 32px; border-radius: 4px; font-weight: bold;
-  font-size: 0.85em; border: 1.5px solid rgba(255,255,255,0.25);
-  margin-right: 2px;
+  width: 20px; height: 28px;
+  border-radius: 3px;
+  background: #F5EDD5;
+  border: 1px solid var(--parchment-dk);
+  font-family: 'Crimson Pro', serif;
+  font-size: .9em; font-weight: 600;
+  margin: 0 1px;
+  position: relative; overflow: hidden;
 }
-.ex-card.red    { background: #c0392b; }
-.ex-card.blue   { background: #2471a3; }
-.ex-card.green  { background: #1e8449; }
-.ex-card.yellow { background: #d4ac0d; color:#333; }
-.ex-card.orange { background: #ca6f1e; }
-.ex-card.purple { background: #7d3c98; }
+.ex-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.ex-card.red    { color: var(--c-red);    --exc: var(--c-red); }
+.ex-card.blue   { color: var(--c-blue);   --exc: var(--c-blue); }
+.ex-card.green  { color: var(--c-green);  --exc: var(--c-green); }
+.ex-card.yellow { color: var(--c-yellow); --exc: var(--c-yellow); }
+.ex-card.orange { color: var(--c-orange); --exc: var(--c-orange); }
+.ex-card.purple { color: var(--c-purple); --exc: var(--c-purple); }
+.ex-card::before { background: var(--exc, var(--ink-faint)); }
+.rule-note { font-size: .72em; color: var(--ink-faint); margin-top: 8px; line-height: 1.6; }
 
-.rule-note { font-size: 0.73em; opacity: 0.65; margin-top: 8px; line-height: 1.6; }
+/* ══════════════════════════════════════════
+   MOBILE RESPONSIVE
+══════════════════════════════════════════ */
+@media (max-width: 500px) {
+  body { padding: 0; }
+  #scr-profile, #scr-menu, #scr-waiting, #scr-join, #scr-connecting {
+    border-radius: 0;
+    min-height: 100vh;
+    box-shadow: none;
+    border: none;
+    padding: 20px 18px 32px;
+  }
+  #scr-profile::before, #scr-menu::before, #scr-waiting::before,
+  #scr-join::before, #scr-connecting::before { display: none; }
+
+  .logo-title { font-size: 24px; }
+  .menu-btn-ja { font-size: 13.5px; }
+  .room-code-box { font-size: 1.6em; letter-spacing: 4px; }
+  .url-row { max-width: 100%; }
+  #code-input { font-size: 1.2em; width: 165px; }
+
+  /* Game: slightly smaller */
+  .card { height: 44px; }
+  .slot { height: 44px; }
+  .card.hc { width: 46px; height: 66px; }
+  .card.hc .cv { font-size: 1.5em; }
+  .card-back { width: 26px; height: 40px; }
+  .fmark { width: 36px; height: 28px; }
+  #flags-row { gap: 3px; min-width: 0; }
+  .fcol { min-width: 0; gap: 1px; }
+  .form-block { gap: 1px; }
+  #player-hand { gap: 3px; min-height: 66px; }
+  #ai-hand { gap: 2px; min-height: 42px; }
+  .card.hc:hover { transform: none; }
+  .card.hc.sel   { transform: translateY(-10px); }
+  #help-bar { display: none; }
+}
 
 @media (max-width: 500px) {
-  #rules-box { padding: 16px 14px; }
-  .ft-row { grid-template-columns: 24px 0.8fr 1fr auto; font-size: 0.72em; }
+  #rules-box { padding: 20px 16px; }
+  .ft-row { grid-template-columns: 22px 0.8fr 1fr auto; font-size: .7em; }
 }
 </style>
 </head>
 <body>
 
-<button class="rules-btn" onclick="openRules()" hidden>📖 ルール説明</button>
-
-<!-- ===== PROFILE (初回のみ) ===== -->
+<!-- ══════════════════════════════════════════
+     PROFILE (初回のみ)
+══════════════════════════════════════════ -->
 <div id="scr-profile" class="screen" hidden>
-  <h1>⚔ バトルライン ⚔</h1>
-  <h2>ニックネーム設定</h2>
-  <p class="status-text">初回のみ入力してください。以降は自動ログインされます。</p>
+  <div class="scr-header" style="justify-content:center">
+    <div class="hr-deco" style="width:80%">
+      <div class="hr-line"></div><div class="hr-gem"></div><div class="hr-line"></div>
+    </div>
+  </div>
+  <div class="profile-logo">Battle Line</div>
+  <div class="profile-logo-jp">バトルライン</div>
+
+  <div class="profile-title">ニックネーム設定</div>
+  <div class="profile-sub">初回のみ入力してください。以降は自動ログインされます。</div>
+
   <input id="profile-name-input" maxlength="12" placeholder="ニックネーム（最大12文字）"
     onkeydown="if(event.key==='Enter')setupProfile()">
-  <button class="btn-big gold" onclick="setupProfile()" style="margin-top:4px">ゲーム開始 →</button>
-  <p class="rule-note" style="max-width:300px;margin-top:8px">
-    名前はこのデバイスに保存されます。個人情報は入力しないでください。
-  </p>
+  <button class="btn-start" onclick="setupProfile()">ゲーム開始 →</button>
+
+  <p class="profile-note">名前はこのデバイスに保存されます。<br>個人情報は入力しないでください。</p>
 </div>
 
-<!-- ===== MENU ===== -->
+<!-- ══════════════════════════════════════════
+     MENU
+══════════════════════════════════════════ -->
 <div id="scr-menu" class="screen">
-  <h1>⚔ バトルライン ⚔</h1>
-  <div id="user-bar">
-    <span>👤 <span class="uname" id="menu-uname">-</span></span>
-    <span class="stats-txt" id="menu-stats">勝: 0 / 負: 0 / 引: 0</span>
-    <button class="btn-sm" onclick="changeNickname()" style="font-size:0.72em;padding:3px 8px">名前変更</button>
+  <!-- Header: rules button -->
+  <div class="scr-header">
+    <button class="rules-btn" onclick="openRules()">
+      <svg viewBox="0 0 16 16" fill="currentColor">
+        <path fill-rule="evenodd" d="M8 1a7 7 0 100 14A7 7 0 008 1zM2 8a6 6 0 1112 0A6 6 0 012 8z"/>
+        <path d="M7 4a1 1 0 012 0v4a1 1 0 01-2 0V4zm1 7a1 1 0 100 2 1 1 0 000-2z"/>
+      </svg>
+      ルール確認
+    </button>
   </div>
-  <button class="btn-big" onclick="startCPUMode()">🤖 CPU と対戦</button>
-  <hr class="menu-divider">
-  <button class="btn-big gold" onclick="startAsHost()">🌐 部屋を作る（ホスト）</button>
-  <button class="btn-big gold" onclick="showJoinScreen()">🔗 部屋に入る（ゲスト）</button>
-  <p style="font-size:0.72em;opacity:0.5;margin-top:4px">オンライン対戦はPeerJSを使用します</p>
+
+  <!-- Logo -->
+  <div class="logo-area">
+    <div class="hr-deco">
+      <div class="hr-line"></div><div class="hr-gem"></div><div class="hr-line"></div>
+    </div>
+    <div class="logo-eyebrow">STRATEGY · CARD · GAME</div>
+    <div class="logo-title">Battle Line</div>
+    <div class="logo-jp">バトルライン</div>
+    <div class="flags-deco">
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+      <div class="fdg"><div class="fdg-p"></div><div class="fdg-s"></div><div class="fdg-d"></div></div>
+    </div>
+    <div class="hr-deco" style="margin-top:0">
+      <div class="hr-line"></div><div class="hr-gem"></div><div class="hr-line"></div>
+    </div>
+  </div>
+
+  <!-- Commander card -->
+  <div class="cmd-card">
+    <svg class="cmd-shield" viewBox="0 0 36 40" fill="none">
+      <path d="M18 1.5L33.5 7L33.5 22Q33.5 33 18 38.5Q2.5 33 2.5 22L2.5 7Z"
+            fill="#EDE0C0" stroke="#A8842A" stroke-width="1.2"/>
+      <path d="M18 5.5L29.5 10L29.5 22Q29.5 30 18 34Q6.5 30 6.5 22L6.5 10Z"
+            fill="none" stroke="#C9A550" stroke-width=".6" opacity=".4"/>
+      <line x1="18" y1="6" x2="18" y2="33" stroke="#A8842A" stroke-width=".5" opacity=".25"/>
+      <line x1="6.5" y1="20" x2="29.5" y2="20" stroke="#A8842A" stroke-width=".5" opacity=".25"/>
+      <text id="menu-shield-letter" x="18" y="23" text-anchor="middle" dominant-baseline="middle"
+            font-family="Cinzel,serif" font-size="10" fill="#4A3E2C" font-weight="700">?</text>
+    </svg>
+    <div class="cmd-info">
+      <div class="cmd-rank">Commander</div>
+      <div class="cmd-name" id="menu-uname">-</div>
+      <div id="menu-stats" class="cmd-rec">
+        <div class="rec-item"><span class="rec-n w" id="menu-wins">0</span><span class="rec-l">WIN</span></div>
+        <div class="rec-sep"></div>
+        <div class="rec-item"><span class="rec-n l" id="menu-losses">0</span><span class="rec-l">LOSS</span></div>
+        <div class="rec-sep"></div>
+        <div class="rec-item"><span class="rec-n d" id="menu-draws">0</span><span class="rec-l">DRAW</span></div>
+      </div>
+    </div>
+    <button class="btn-ren" onclick="changeNickname()">変更</button>
+  </div>
+
+  <!-- Toast for error messages -->
+  <div id="menu-toast" class="menu-toast" hidden></div>
+
+  <!-- Solo -->
+  <div class="sec-label">
+    <div class="sec-gem"></div><div class="sec-bar"></div>
+    <div class="sec-txt">一人で遊ぶ</div>
+    <div class="sec-bar"></div><div class="sec-gem"></div>
+  </div>
+
+  <button class="menu-btn menu-btn-cpu" onclick="startCPUMode()">
+    <div class="menu-btn-inner">
+      <div class="menu-btn-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 15Q4 8 12 6Q20 8 20 15"/><line x1="3" y1="15" x2="21" y2="15"/>
+          <path d="M6 18L6 15M18 18L18 15"/><path d="M6 18Q12 20 18 18"/>
+          <circle cx="19.5" cy="19" r="2.2" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="menu-btn-txts">
+        <div class="menu-btn-ja">CPU と対戦する</div>
+        <div class="menu-btn-en">VS AUTOMATON</div>
+      </div>
+      <svg class="menu-btn-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4L13 10L7 16"/></svg>
+    </div>
+  </button>
+
+  <!-- Online -->
+  <div class="sec-label" style="margin-top:18px">
+    <div class="sec-gem"></div><div class="sec-bar"></div>
+    <div class="sec-txt">ふたりで遊ぶ</div>
+    <div class="sec-bar"></div><div class="sec-gem"></div>
+  </div>
+
+  <button class="menu-btn menu-btn-host" onclick="startAsHost()">
+    <div class="menu-btn-inner">
+      <div class="menu-btn-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+          <line x1="6" y1="3" x2="6" y2="21"/>
+          <path d="M6 4L18 8L6 14" fill="rgba(46,74,48,.12)"/>
+          <line x1="4.5" y1="21" x2="7.5" y2="21"/>
+        </svg>
+      </div>
+      <div class="menu-btn-txts">
+        <div class="menu-btn-ja">部屋を作る</div>
+        <div class="menu-btn-en">RAISE BANNER · HOST</div>
+      </div>
+      <svg class="menu-btn-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4L13 10L7 16"/></svg>
+    </div>
+  </button>
+
+  <button class="menu-btn menu-btn-join" onclick="showJoinScreen()">
+    <div class="menu-btn-inner">
+      <div class="menu-btn-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+          <line x1="12" y1="4" x2="12" y2="20" stroke-dasharray="1.5,1.5" stroke-width=".9"/>
+          <path d="M3 12L8 9.5L8 14.5Z" fill="rgba(122,32,32,.1)"/>
+          <path d="M21 12L16 9.5L16 14.5Z" fill="rgba(122,32,32,.1)"/>
+          <line x1="8" y1="12" x2="16" y2="12" stroke-width="1.1"/>
+        </svg>
+      </div>
+      <div class="menu-btn-txts">
+        <div class="menu-btn-ja">部屋に入る</div>
+        <div class="menu-btn-en">JOIN BATTLE · GUEST</div>
+      </div>
+      <svg class="menu-btn-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4L13 10L7 16"/></svg>
+    </div>
+  </button>
+
+  <!-- Footer -->
+  <div class="menu-footer">
+    <div class="footer-tokens">
+      <div class="ft" style="background:var(--c-red)"></div>
+      <div class="ft" style="background:var(--c-green)"></div>
+      <div class="ft" style="background:var(--c-blue)"></div>
+      <div class="ft" style="background:var(--c-yellow)"></div>
+      <div class="ft" style="background:var(--c-purple)"></div>
+      <div class="ft" style="background:var(--c-orange)"></div>
+    </div>
+    <div class="footer-note">P2P CONNECTION · PEERJS</div>
+  </div>
 </div>
 
-<!-- ===== WAITING (host) ===== -->
+<!-- ══════════════════════════════════════════
+     WAITING (host)
+══════════════════════════════════════════ -->
 <div id="scr-waiting" class="screen" hidden>
-  <h2>部屋を作りました</h2>
-  <p class="status-text">ルームコードを相手に伝えてください</p>
+  <div class="lobby-title">部屋を作りました</div>
+  <div class="lobby-sub">ルームコードを相手に伝えてください</div>
   <div class="room-code-box" id="room-code-disp">...</div>
   <div class="url-row">
     <input id="room-url-input" readonly placeholder="URL生成中...">
     <button class="btn-sm" onclick="copyURL()">コピー</button>
   </div>
   <div class="spinner"></div>
-  <p class="status-text warn" id="wait-status">接続待ち中...</p>
-  <button class="btn-sm" onclick="backToMenu()" style="margin-top:10px">← メニューへ</button>
+  <div class="lobby-sub" id="wait-status">接続待ち中...</div>
+  <button class="btn-sm" onclick="backToMenu()" style="margin-top:4px">← メニューへ</button>
 </div>
 
-<!-- ===== JOIN (guest) ===== -->
+<!-- ══════════════════════════════════════════
+     JOIN (guest)
+══════════════════════════════════════════ -->
 <div id="scr-join" class="screen" hidden>
-  <h2>部屋に入る</h2>
-  <p class="status-text">ホストのルームコードを入力してください</p>
+  <div class="lobby-title">部屋に入る</div>
+  <div class="lobby-sub">ホストのルームコードを入力してください</div>
   <div class="code-input-wrap">
-    <input id="code-input" maxlength="20" placeholder="コード入力" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')connectToHost()">
+    <input id="code-input" maxlength="20" placeholder="コード入力"
+      oninput="this.value=this.value.toUpperCase()"
+      onkeydown="if(event.key==='Enter')connectToHost()">
     <button class="btn-sm" onclick="connectToHost()">接続</button>
   </div>
-  <p class="status-text warn" id="join-status" style="min-height:1.2em"></p>
-  <button class="btn-sm" onclick="backToMenu()" style="margin-top:6px">← メニューへ</button>
+  <div class="lobby-warn" id="join-status"></div>
+  <button class="btn-sm" onclick="backToMenu()">← メニューへ</button>
 </div>
 
-<!-- ===== CONNECTING ===== -->
+<!-- ══════════════════════════════════════════
+     CONNECTING
+══════════════════════════════════════════ -->
 <div id="scr-connecting" class="screen" hidden>
-  <h2 style="margin-bottom:16px">接続中...</h2>
+  <div class="lobby-title">接続中...</div>
   <div class="spinner"></div>
-  <p class="status-text" style="margin-top:14px" id="conn-status">ホストに接続しています</p>
+  <div class="lobby-sub" id="conn-status">ホストに接続しています</div>
+  <button class="btn-sm" onclick="backToMenu()" style="margin-top:4px">キャンセル</button>
 </div>
 
-<!-- ===== GAME ===== -->
+<!-- ══════════════════════════════════════════
+     GAME
+══════════════════════════════════════════ -->
 <div id="scr-game" class="screen" hidden>
-  <h1>⚔ バトルライン ⚔</h1>
 
   <div id="info-bar">
     <span class="chip" id="ps">🔵 あなた: 0旗</span>
     <span class="chip" id="as">🔴 <span id="opp-label-chip">CPU</span>: 0旗</span>
     <span class="chip" id="dk">山札: 0枚</span>
     <span class="chip" id="msg">...</span>
-    <button class="exit-btn" onclick="exitMatch()">🚪 退出</button>
+    <button class="exit-btn" onclick="exitMatch()">退出</button>
+    <button class="rules-btn" onclick="openRules()" style="font-size:7px;padding:4px 9px;">
+      <svg viewBox="0 0 16 16" fill="currentColor" style="width:9px;height:9px;">
+        <path fill-rule="evenodd" d="M8 1a7 7 0 100 14A7 7 0 008 1zM2 8a6 6 0 1112 0A6 6 0 012 8z"/>
+        <path d="M7 4a1 1 0 012 0v4a1 1 0 01-2 0V4zm1 7a1 1 0 100 2 1 1 0 000-2z"/>
+      </svg>
+      ルール
+    </button>
   </div>
 
-  <div>
-    <div class="opp-label" id="opp-hand-label">CPU の手札</div>
+  <div class="opp-area">
+    <div class="hand-label" id="opp-hand-label">CPU の手札</div>
     <div id="ai-hand"></div>
   </div>
 
@@ -543,8 +1403,8 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
     <div id="flags-row"></div>
   </div>
 
-  <div>
-    <div class="sec-lbl">あなたの手札</div>
+  <div class="player-area">
+    <div class="hand-label">あなたの手札</div>
     <div id="player-hand"></div>
   </div>
 
@@ -553,7 +1413,9 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
   </div>
 </div>
 
-<!-- Rules modal -->
+<!-- ══════════════════════════════════════════
+     RULES MODAL
+══════════════════════════════════════════ -->
 <div id="rules-modal">
   <div id="rules-box">
     <button class="rules-close" onclick="closeRules()">✕</button>
@@ -636,7 +1498,9 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
   </div>
 </div>
 
-<!-- Overlay -->
+<!-- ══════════════════════════════════════════
+     OVERLAY (game over)
+══════════════════════════════════════════ -->
 <div id="overlay">
   <div id="ov-box">
     <div id="ov-msg"></div>
@@ -654,8 +1518,8 @@ const FT = { W:5, P:4, B:3, S:2, H:1 };
 const FN = { 5:'ウェッジ', 4:'ファランクス', 3:'バタリオン', 2:'スカーミッシュ', 1:'ホスト' };
 
 // ===== State =====
-let gameMode = 'cpu';   // 'cpu' | 'online'
-let myRole   = null;    // 'host' | 'guest'
+let gameMode = 'cpu';
+let myRole   = null;
 let peer     = null;
 let conn     = null;
 let G        = {};
@@ -666,8 +1530,6 @@ function showScreen(id) {
   ['scr-profile','scr-menu','scr-waiting','scr-join','scr-connecting','scr-game'].forEach(s => {
     document.getElementById(s).hidden = (s !== id);
   });
-  // プロフィール設定画面ではルールボタンを非表示（初回セットアップ中は不要）
-  document.querySelector('.rules-btn').hidden = (id === 'scr-profile');
 }
 
 function backToMenu() {
@@ -688,7 +1550,7 @@ function saveProfile(name) {
 }
 function setupProfile() {
   const name = document.getElementById('profile-name-input').value.trim();
-  if (!name) { document.getElementById('profile-name-input').style.borderColor='#f64'; return; }
+  if (!name) { document.getElementById('profile-name-input').style.borderColor='var(--crimson)'; return; }
   saveProfile(name);
   renderMenuStats();
   const room = new URLSearchParams(location.search).get('room');
@@ -718,12 +1580,22 @@ function recordResult(result, pFlags, aFlags, mode) {
 }
 function renderMenuStats() {
   const p = loadProfile();
-  document.getElementById('menu-uname').textContent = p ? p.name : '-';
+  const uname = document.getElementById('menu-uname');
+  if (uname) uname.textContent = p ? p.name : '-';
+  // Shield letter
+  const sl = document.getElementById('menu-shield-letter');
+  if (sl) sl.textContent = p && p.name ? p.name.charAt(0).toUpperCase() : '?';
+
   const hist = loadHistory();
   const w = hist.filter(h => h.result === 'win').length;
   const l = hist.filter(h => h.result === 'lose').length;
   const d = hist.filter(h => h.result === 'draw').length;
-  document.getElementById('menu-stats').textContent = `勝: ${w} / 負: ${l} / 引: ${d}`;
+  const wEl = document.getElementById('menu-wins');
+  const lEl = document.getElementById('menu-losses');
+  const dEl = document.getElementById('menu-draws');
+  if (wEl) wEl.textContent = w;
+  if (lEl) lEl.textContent = l;
+  if (dEl) dEl.textContent = d;
 }
 
 // ===== Exit match =====
@@ -780,7 +1652,6 @@ function startAsHost() {
   });
 
   peer.on('connection', (c) => {
-    // Accept only first connection
     if (conn) { c.close(); return; }
     conn = c;
     conn.on('open', () => {
@@ -837,7 +1708,6 @@ function connectToHost(code, fromUrl = false) {
       document.getElementById('opp-hand-label').textContent = '相手の手札';
       document.getElementById('ov-btn').textContent = 'メニューへ戻る';
       showScreen('scr-game');
-      // Init blank G to avoid render errors while waiting for state
       G = { deck: null, deckCount: 0, ph: [], ah: [], flags: Array(9).fill(0).map(()=>({p:[],a:[],w:null})), myTurn: false, over: false };
       render();
     });
@@ -853,14 +1723,13 @@ function connectToHost(code, fromUrl = false) {
   peer.on('error', err => {
     cleanupPeer();
     if (fromUrl) {
-      // URL経由の自動接続失敗 → ホストが待機中でない場合はメニューへ戻す
       showScreen('scr-menu');
-      // メニュー上部に一時メッセージを表示
-      const el = document.getElementById('menu-stats');
-      const orig = el.textContent;
-      el.textContent = '⚠ 部屋が見つかりませんでした。ホストが待機中か確認してください。';
-      el.style.color = '#ffa040';
-      setTimeout(() => { el.style.color = ''; renderMenuStats(); }, 4000);
+      const toast = document.getElementById('menu-toast');
+      if (toast) {
+        toast.textContent = '⚠ 部屋が見つかりませんでした。ホストが待機中か確認してください。';
+        toast.hidden = false;
+        setTimeout(() => { toast.hidden = true; }, 4000);
+      }
     } else {
       showScreen('scr-join');
       document.getElementById('join-status').textContent = 'エラー: ' + err.type + ' (コードを確認してください)';
@@ -903,7 +1772,6 @@ function guestPerspective() {
     myTurn: !G.myTurn,
     over: G.over,
     winner: G.winner === 'player' ? 'guest' : G.winner === 'ai' ? 'host' : G.winner,
-    // ゲスト視点でハイライト情報を反転して送る
     lastP: G.lastA ? { fi: G.lastA.fi, id: G.lastA.id } : null,
     lastA: G.lastP ? { fi: G.lastP.fi, id: G.lastP.id } : null
   };
@@ -916,23 +1784,20 @@ function sendStateToGuest(gameOverMsg) {
 
 function onDataFromGuest(data) {
   if (G.over) return;
-
   if (data.type === 'forfeit') {
     recordResult('win', G.flags.filter(f=>f.w==='p').length, G.flags.filter(f=>f.w==='a').length, 'online');
     G.over = true;
     showOverlay('相手が退出しました\nあなたの勝ち！🎉');
     render(); return;
   }
-
   if (data.type !== 'move' || G.myTurn) return;
   const { flagIndex, card } = data;
   const flag = G.flags[flagIndex];
   if (!flag || flag.w || flag.a.length >= 3) return;
   const found = G.ah.find(c => c.id === card.id);
   if (!found) return;
-
   flag.a.push(found);
-  G.lastA = { fi: flagIndex, id: found.id }; // ← ハイライト記録
+  G.lastA = { fi: flagIndex, id: found.id };
   G.ah = G.ah.filter(c => c.id !== card.id);
   if (G.deck.length > 0) G.ah.push(G.deck.pop());
   autoClaim();
@@ -941,21 +1806,19 @@ function onDataFromGuest(data) {
 
 function onDataFromHost(data) {
   if (G.over) return;
-
   if (data.type === 'forfeit') {
     recordResult('win', 0, 0, 'online');
     G.over = true;
     showOverlay('相手が退出しました\nあなたの勝ち！🎉');
     render(); return;
   }
-
   if (data.type !== 'state') return;
   const s = data.state;
   G = {
     deck: null, deckCount: s.deckCount,
     ph: s.ph, ah: s.ah, flags: s.flags,
     myTurn: s.myTurn, over: s.over, winner: s.winner,
-    lastP: s.lastP, lastA: s.lastA  // ← ホストから渡されるハイライト情報
+    lastP: s.lastP, lastA: s.lastA
   };
   if (s.over) {
     const wMsg = s.winner==='guest' ? 'あなたの勝ち！🎉' : s.winner==='host' ? '相手の勝ち...' : '引き分け！';
@@ -977,7 +1840,6 @@ function mkDeck() {
   for (const c of COLORS) for (let v = 1; v <= 10; v++) d.push({ c, v, id: c + v });
   return d;
 }
-
 function shuf(a) {
   const b = [...a];
   for (let i = b.length-1; i > 0; i--) {
@@ -985,7 +1847,6 @@ function shuf(a) {
   }
   return b;
 }
-
 function getDeckCount() { return G.deck ? G.deck.length : (G.deckCount ?? 0); }
 
 // ===== Formation logic =====
@@ -1000,7 +1861,6 @@ function evForm(cards) {
   const t = flush&&str ? FT.W : tok ? FT.P : flush ? FT.B : str ? FT.S : FT.H;
   return { t, sum, vs };
 }
-
 function cmpF(a, b) {
   if (!a && !b) return 0; if (!a) return -1; if (!b) return 1;
   if (a.t !== b.t) return a.t - b.t;
@@ -1027,9 +1887,7 @@ function initGame() {
 }
 
 // ===== Render =====
-function render() {
-  rStatus(); rAIHand(); rFlags(); rPHand();
-}
+function render() { rStatus(); rAIHand(); rFlags(); rPHand(); }
 
 function rStatus() {
   const pc = G.flags.filter(f => f.w === 'p').length;
@@ -1040,7 +1898,7 @@ function rStatus() {
   const mc = document.getElementById('msg');
   if (G.over) { mc.textContent = ''; return; }
   if (G.myTurn) {
-    mc.textContent = sel ? `${CN[sel.c]}${sel.v} を選択中 → 旗をクリック` : 'カードを選んでください';
+    mc.textContent = sel ? `${CN[sel.c]}${sel.v} を選択 → 旗をクリック` : 'カードを選んでください';
   } else {
     mc.textContent = gameMode === 'online' ? '相手の番です...' : 'CPUが考えています...';
   }
@@ -1076,11 +1934,10 @@ function mkSlotEl(open, onClick) {
 function rFlags() {
   const row = document.getElementById('flags-row');
   row.innerHTML = '';
-
   (G.flags || []).forEach((flag, fi) => {
     const col = document.createElement('div'); col.className = 'fcol';
 
-    // AI side (top): newest card closest to flag = show at bottom of this block
+    // AI side
     const aiBlk = document.createElement('div'); aiBlk.className = 'form-block';
     for (let j = 0; j < 3; j++) {
       const idx = j - (3 - flag.a.length);
@@ -1094,7 +1951,7 @@ function rFlags() {
     if (flag.a.length === 3) { const f = evForm(flag.a); aiLbl.textContent = f ? FN[f.t] : ''; }
     aiBlk.appendChild(aiLbl);
 
-    // Flag marker — also clickable as shortcut when a card is selected
+    // Flag marker
     const canPlayFlag = G.myTurn && !flag.w && flag.p.length < 3 && sel && !G.over;
     const fm = document.createElement('div'); fm.className = 'fmark';
     if (canPlayFlag) {
@@ -1110,7 +1967,7 @@ function rFlags() {
     const fn = document.createElement('span'); fn.className = 'fnum'; fn.textContent = fi+1;
     fm.appendChild(fn);
 
-    // Player side (bottom): newest card closest to flag = show at top of this block
+    // Player side
     const pBlk = document.createElement('div'); pBlk.className = 'form-block';
     const pLbl = document.createElement('div'); pLbl.className = 'flbl';
     if (flag.p.length === 3) { const f = evForm(flag.p); pLbl.textContent = f ? FN[f.t] : ''; }
@@ -1155,13 +2012,11 @@ function playCard(fi) {
   if (!G.myTurn || !sel || G.over) return;
   const flag = G.flags[fi];
   if (!flag || flag.w || flag.p.length >= 3) return;
-
   const played = sel;
   flag.p.push(played);
-  G.lastP = { fi, id: played.id }; // ← ハイライト記録
+  G.lastP = { fi, id: played.id };
   G.ph = G.ph.filter(c => c.id !== played.id);
   sel = null;
-
   if (gameMode === 'cpu') {
     if (G.deck.length > 0) G.ph.push(G.deck.pop());
     autoClaim();
@@ -1196,7 +2051,6 @@ function chkWin() {
   const pc = G.flags.filter(f => f.w === 'p').length;
   const ac = G.flags.filter(f => f.w === 'a').length;
   const opp = gameMode === 'online' ? '相手' : 'CPU';
-
   if (pc >= 5) { endGame('あなたの勝ち！🎉\n5つの旗を獲得！', 'player'); return true; }
   if (ac >= 5) { endGame(`${opp}の勝ち...\n5つの旗を獲得された`, 'ai'); return true; }
   for (let i = 0; i <= 6; i++) {
@@ -1219,7 +2073,6 @@ function chkWin() {
 function endGame(msg, winnerSide) {
   G.over = true;
   G.winner = winnerSide;
-  // 対戦結果を記録
   const pc = G.flags.filter(f => f.w === 'p').length;
   const ac = G.flags.filter(f => f.w === 'a').length;
   const result = winnerSide === 'player' ? 'win' : winnerSide === 'ai' ? 'lose' : 'draw';
@@ -1249,7 +2102,6 @@ function restartOrMenu() {
 
 // ===== AI (超強化版 v3) =====
 
-// AIの視点から「未知のカード」= 相手の手札 + 残りデッキ
 function unknownCards() {
   const known = new Set();
   G.ah.forEach(c => known.add(c.id));
@@ -1260,7 +2112,6 @@ function unknownCards() {
   return mkDeck().filter(c => !known.has(c.id));
 }
 
-// pool から n 枚追加したときの最強フォーメーションを返す（v2: Wedge/Flush 網羅）
 function bestReachable(cards, pool) {
   const n = 3 - cards.length;
   if (n === 0) return evForm(cards);
@@ -1274,23 +2125,19 @@ function bestReachable(cards, pool) {
       for (let j = i+1; j < pool.length; j++)
         upd(evForm([...cards, pool[i], pool[j]]));
   } else {
-    // n=3（cards が空）: Wedge → Flush → 高カードの順に網羅探索
     const byColor = {};
     for (const c of pool) (byColor[c.c] || (byColor[c.c] = [])).push(c);
     for (const arr of Object.values(byColor)) {
       arr.sort((a,b) => a.v - b.v);
-      // Wedge（同色連続3枚）
       for (let i = 0; i < arr.length-2; i++)
         if (arr[i].v+1===arr[i+1].v && arr[i+1].v+1===arr[i+2].v)
           upd(evForm([arr[i], arr[i+1], arr[i+2]]));
-      // Flush（同色任意3枚）
       if (arr.length >= 3)
         for (let i=0; i<arr.length-2; i++)
           for (let j=i+1; j<arr.length-1; j++)
             for (let k=j+1; k<arr.length; k++)
               upd(evForm([arr[i], arr[j], arr[k]]));
     }
-    // 高カード上位18枚の組み合わせ（Straight 含む）
     const top = [...pool].sort((a,b) => b.v - a.v).slice(0, 18);
     for (let i=0; i<top.length-2; i++)
       for (let j=i+1; j<top.length-1; j++)
@@ -1300,39 +2147,29 @@ function bestReachable(cards, pool) {
   return best;
 }
 
-// 旗が参加する連続3本グループ数（中央ほど高い: 1,2,3,3,3,3,3,2,1）
 function flagStrategicVal(fi) {
   let v = 0;
   for (let s = 0; s <= 6; s++) if (fi >= s && fi <= s+2) v++;
   return v;
 }
 
-// 各旗の緊急度スコア（勝利条件に近いほど高い・ブロック必須は大きなマイナス）
 function gameUrgency() {
   const cl  = G.flags.map(f => f.w);
   const aiW = cl.filter(c => c === 'a').length;
   const pW  = cl.filter(c => c === 'p').length;
   const urg = new Array(9).fill(0);
-
-  // 5本勝利ライン
   if (aiW >= 4) G.flags.forEach((f,i) => { if (!f.w) urg[i] += 15000; });
   else if (aiW >= 3) G.flags.forEach((f,i) => { if (!f.w) urg[i] += 2500; });
   if (pW >= 4)  G.flags.forEach((f,i) => { if (!f.w) urg[i] -= 18000; });
   else if (pW >= 3) G.flags.forEach((f,i) => { if (!f.w) urg[i] -= 3000; });
-
-  // 3連続勝利ライン
   for (let s = 0; s <= 6; s++) {
     const g   = [s, s+1, s+2];
     const aWg = g.filter(i => cl[i] === 'a').length;
     const pWg = g.filter(i => cl[i] === 'p').length;
     const unc = g.filter(i => !cl[i] && G.flags[i].a.length < 3);
-
-    // 相手が2本持っている → 絶対ブロック
     if (pWg === 2 && aWg === 0) unc.forEach(i => urg[i] -= 12000);
     else if (pWg === 2)         unc.forEach(i => urg[i] -= 6000);
     else if (pWg === 1 && aWg === 0) unc.forEach(i => urg[i] -= 700);
-
-    // 自分が2本持っている → 今すぐ勝ち取る
     if (aWg === 2 && pWg === 0) unc.forEach(i => urg[i] += 10000);
     else if (aWg === 2)         unc.forEach(i => urg[i] += 5500);
     else if (aWg === 1 && pWg === 0) unc.forEach(i => urg[i] += 600);
@@ -1344,14 +2181,10 @@ function aiTurn() {
   if (G.over) return;
   const avail = G.flags.map((f,i) => ({f,i})).filter(({f}) => !f.w && f.a.length < 3);
   if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
-
   const unk = unknownCards();
   const urg = gameUrgency();
-
-  // 各旗の「プレイヤー側ベストフォーメーション」を事前計算（キャッシュ）
   const pBest = {};
   for (const {f,i} of avail) pBest[i] = bestReachable(f.p, unk);
-
   let best = null, bsc = -Infinity;
   for (const card of G.ah) {
     for (const {f,i} of avail) {
@@ -1372,76 +2205,45 @@ function aiTurn() {
 
 function aiScore(card, flag, fi, unk, urg, pBestForm) {
   const sim = [...flag.a, card];
-  let sc = urg[fi]; // まず緊急度ベース
-
+  let sc = urg[fi];
   if (sim.length === 3) {
-    // ── AI のフォーメーション完成 ──
     const af = evForm(sim);
-
     if (flag.p.length === 3) {
-      // 両者完成: 直接勝負
       const cmp = cmpF(af, evForm(flag.p));
       sc += cmp > 0 ? 11000 : cmp < 0 ? -8000 : -2500;
     } else {
-      // 自分だけ完成: 相手が何を引いても勝てるか？
       const cmp = pBestForm ? cmpF(af, pBestForm) : 1;
-      if (cmp > 0) {
-        // 確実勝利 → 大ボーナス＋フォーメーション品質加算
-        sc += 9000 + af.t * 600 + af.sum * 50;
-      } else if (cmp === 0) {
-        // 相手が最善を引いたとき引き分け → まず勝てる
-        sc += 3500 + af.t * 300;
-      } else {
-        // 相手が最善を引くと負ける → 完成ボーナスは小さめ
-        sc += 1200 + af.t * 120;
-      }
+      if (cmp > 0) sc += 9000 + af.t * 600 + af.sum * 50;
+      else if (cmp === 0) sc += 3500 + af.t * 300;
+      else sc += 1200 + af.t * 120;
     }
   } else {
-    // ── AI のフォーメーション未完成 ──
     const bestA = bestReachable(sim, unk);
-
     if (flag.p.length === 3) {
-      // 相手は完成済: 追いつけるか？
       if (bestA) {
         const cmp = cmpF(bestA, evForm(flag.p));
-        if (cmp > 0)      sc += 5000 + sim.length * 400;
+        if (cmp > 0)        sc += 5000 + sim.length * 400;
         else if (cmp === 0) sc += 1200;
-        else              sc -= 3500; // 逆転不可: 見切り
-      } else {
-        sc -= 3500;
-      }
+        else                sc -= 3500;
+      } else sc -= 3500;
     } else if (bestA && pBestForm) {
-      // 双方未完成: 最善フォーメーション同士を比較
       const cmp = cmpF(bestA, pBestForm);
       const gap = Math.abs(bestA.t - pBestForm.t);
-      if (cmp > 0) {
-        sc += 900 + gap * 350;
-        sc += sim.length * 350; // コミット済みフラグへの加点
-      } else if (cmp < 0) {
-        sc -= 180 + gap * 120;
-      }
-      // 相手より多くカードを出していると有利
+      if (cmp > 0) { sc += 900 + gap * 350; sc += sim.length * 350; }
+      else if (cmp < 0) sc -= 180 + gap * 120;
       sc += (sim.length - flag.p.length) * 200;
     }
-
-    // ポテンシャル品質（残プールを踏まえた期待値）
     sc += potSc(sim, unk) * 22 + card.v * 6;
-    if (flag.a.length > 0) sc += flag.a.length * 280; // 途中まで置いた旗を優先
+    if (flag.a.length > 0) sc += flag.a.length * 280;
   }
-
-  // 数学的に負け確定の旗への無駄打ちを強く抑制
   if (flag.p.length === 3 && sim.length < 3) {
     const bA = bestReachable(sim, unk);
     if (bA && cmpF(bA, evForm(flag.p)) < 0) sc -= 4000;
   }
-
-  // 中央フラグほど重要
   sc += flagStrategicVal(fi) * 110;
-
   return sc;
 }
 
-// ポテンシャルスコア（残プールを踏まえた形成可能性）
 function potSc(cs, pool) {
   if (!cs.length) return 0;
   const vs     = cs.map(x => x.v).sort((a,b) => a-b);
@@ -1450,28 +2252,20 @@ function potSc(cs, pool) {
   const span   = maxV - minV;
   const isConsec = span === cs.length-1 && new Set(vs).size === vs.length;
   const pl     = pool || [];
-
   if (cs.length >= 3) return evForm(cs).t * 100 + evForm(cs).sum;
-
-  // Wedge（同色＋連続）パス
   if (sameC && isConsec) {
     if (cs.length === 2) {
       const canLo = minV > 1  && pl.some(c => c.c === cs[0].c && c.v === minV-1);
       const canHi = maxV < 10 && pl.some(c => c.c === cs[0].c && c.v === maxV+1);
       return (canLo || canHi) ? 980 : 430;
     }
-    // length === 1: 同色カードがプールに2枚以上あるか
     const sameColorCnt = pl.filter(c => c.c === cs[0].c).length;
     return sameColorCnt >= 2 ? 700 : 380;
   }
-
-  // Flush（同色）パス
   if (sameC) {
     const cnt = pl.filter(c => c.c === cs[0].c).length;
     return cs.length === 2 ? 340 + cnt * 12 : 190 + cnt * 9;
   }
-
-  // Straight（連続）パス
   if (isConsec) {
     if (cs.length === 2) {
       const canLo = minV > 1  && pl.some(c => c.v === minV-1);
@@ -1480,17 +2274,13 @@ function potSc(cs, pool) {
     }
     return 150;
   }
-
-  // 高カード（バラバラ）
   return 28 + vs.reduce((a,b) => a+b, 0) * 3 / cs.length;
 }
 
 // ===== Rules modal =====
 function openRules()  { document.getElementById('rules-modal').classList.add('on'); }
 function closeRules() { document.getElementById('rules-modal').classList.remove('on'); }
-// Esc キーで閉じる
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRules(); });
-// 背景クリックで閉じる
 document.getElementById('rules-modal').addEventListener('click', e => {
   if (e.target.id === 'rules-modal') closeRules();
 });
@@ -1500,16 +2290,14 @@ window.addEventListener('load', () => {
   const room = new URLSearchParams(location.search).get('room');
   const profile = loadProfile();
   if (!profile) {
-    // 初回：プロフィール設定画面へ
     showScreen('scr-profile');
   } else {
     renderMenuStats();
     if (room) {
-      // URLからroomパラメータを取り除く（リロード時の再接続防止）
       history.replaceState(null, '', location.pathname);
       document.getElementById('code-input').value = room;
       showScreen('scr-connecting');
-      connectToHost(room, true);  // fromUrl=true: 失敗時はメニューへ戻す
+      connectToHost(room, true);
     } else {
       showScreen('scr-menu');
     }
