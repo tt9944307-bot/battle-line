@@ -329,9 +329,88 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
 #ov-box button:hover { background: #ffe94d; }
 
 .opp-label { font-size: 0.7em; opacity: 0.6; text-align: center; }
+
+/* ルールボタン */
+.rules-btn {
+  position: fixed; top: 10px; right: 12px; z-index: 50;
+  background: rgba(0,0,0,0.45); border: 1.5px solid rgba(255,255,255,0.3);
+  color: #fff; font-size: 0.82em; padding: 5px 12px;
+  border-radius: 20px; cursor: pointer;
+  transition: background 0.15s;
+}
+.rules-btn:hover { background: rgba(255,255,255,0.15); }
+
+/* ルール モーダル */
+#rules-modal {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75); z-index: 200;
+  align-items: center; justify-content: center;
+  padding: 12px;
+}
+#rules-modal.on { display: flex; }
+
+#rules-box {
+  background: #0f2a1a; border: 2px solid rgba(255,215,0,0.5);
+  border-radius: 14px; padding: 22px 24px; width: 100%;
+  max-width: 560px; max-height: 90vh; overflow-y: auto;
+  position: relative;
+}
+
+.rules-close {
+  position: absolute; top: 12px; right: 14px;
+  background: none; border: none; color: rgba(255,255,255,0.5);
+  font-size: 1.1em; cursor: pointer; line-height: 1;
+}
+.rules-close:hover { color: #fff; }
+
+#rules-box h2 { font-size: 1.1em; text-align: center; margin-bottom: 18px; color: #ffd700; }
+#rules-box h3 { font-size: 0.9em; color: #ffd700; margin: 16px 0 8px; border-bottom: 1px solid rgba(255,215,0,0.2); padding-bottom: 4px; }
+
+.rule-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+.rule-card {
+  flex: 1; min-width: 130px; background: rgba(255,255,255,0.07);
+  border-radius: 8px; padding: 10px 12px; text-align: center; font-size: 0.82em;
+}
+.rule-icon { display: block; font-size: 1.2em; margin-bottom: 4px; }
+
+.rule-list { padding-left: 18px; font-size: 0.82em; line-height: 1.9; }
+
+/* フォーメーション表 */
+.formation-table { font-size: 0.78em; border-collapse: collapse; width: 100%; }
+.ft-row {
+  display: grid; grid-template-columns: 28px 1fr 1.4fr auto;
+  gap: 6px; align-items: center;
+  padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.ft-header { opacity: 0.45; font-size: 0.85em; padding-bottom: 4px; }
+.ft-rank { font-size: 1em; text-align: center; }
+.ft-name { font-weight: bold; }
+.ft-name.gold { color: #ffd700; }
+
+.ex-card {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 32px; border-radius: 4px; font-weight: bold;
+  font-size: 0.85em; border: 1.5px solid rgba(255,255,255,0.25);
+  margin-right: 2px;
+}
+.ex-card.red    { background: #c0392b; }
+.ex-card.blue   { background: #2471a3; }
+.ex-card.green  { background: #1e8449; }
+.ex-card.yellow { background: #d4ac0d; color:#333; }
+.ex-card.orange { background: #ca6f1e; }
+.ex-card.purple { background: #7d3c98; }
+
+.rule-note { font-size: 0.73em; opacity: 0.65; margin-top: 8px; line-height: 1.6; }
+
+@media (max-width: 500px) {
+  #rules-box { padding: 16px 14px; }
+  .ft-row { grid-template-columns: 24px 0.8fr 1fr auto; font-size: 0.72em; }
+}
 </style>
 </head>
 <body>
+
+<button class="rules-btn" onclick="openRules()">📖 ルール説明</button>
 
 <!-- ===== MENU ===== -->
 <div id="scr-menu" class="screen">
@@ -403,6 +482,89 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
 
   <div id="help-bar">
     勝利: 旗5つ獲得 または 連続3旗 ／ 強さ: ウェッジ &gt; ファランクス &gt; バタリオン &gt; スカーミッシュ &gt; ホスト
+  </div>
+</div>
+
+<!-- Rules modal -->
+<div id="rules-modal">
+  <div id="rules-box">
+    <button class="rules-close" onclick="closeRules()">✕</button>
+    <h2>⚔ バトルライン ルール説明 ⚔</h2>
+
+    <section>
+      <h3>🎯 勝利条件</h3>
+      <div class="rule-cards">
+        <div class="rule-card">
+          <span class="rule-icon">🚩🚩🚩🚩🚩</span>
+          <strong>合計5本の旗を獲得</strong>
+        </div>
+        <div class="rule-card">
+          <span class="rule-icon">🚩🚩🚩</span>
+          <strong>連続した3本の旗を獲得</strong>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3>🔄 ターンの流れ</h3>
+      <ol class="rule-list">
+        <li>手札から1枚選んで、いずれかの旗に置く（1旗につき自分の陣営は最大3枚）</li>
+        <li>山札から1枚引く（山札が空の場合は引かない）</li>
+        <li>両陣営が3枚揃った旗は、強いフォーメーションの側が獲得</li>
+      </ol>
+    </section>
+
+    <section>
+      <h3>🃏 フォーメーションの強さ（強い順）</h3>
+      <div class="formation-table">
+        <div class="ft-row ft-header">
+          <span>順位</span><span>名称</span><span>条件</span><span>例</span>
+        </div>
+        <div class="ft-row">
+          <span class="ft-rank">①</span>
+          <span class="ft-name gold">ウェッジ</span>
+          <span>同じ色で連番3枚<br><small>（ストレートフラッシュ）</small></span>
+          <span><span class="ex-card red">7</span><span class="ex-card red">8</span><span class="ex-card red">9</span></span>
+        </div>
+        <div class="ft-row">
+          <span class="ft-rank">②</span>
+          <span class="ft-name">ファランクス</span>
+          <span>同じ数字3枚<br><small>（スリーカード）</small></span>
+          <span><span class="ex-card blue">7</span><span class="ex-card green">7</span><span class="ex-card red">7</span></span>
+        </div>
+        <div class="ft-row">
+          <span class="ft-rank">③</span>
+          <span class="ft-name">バタリオン</span>
+          <span>同じ色3枚<br><small>（フラッシュ）</small></span>
+          <span><span class="ex-card purple">2</span><span class="ex-card purple">6</span><span class="ex-card purple">9</span></span>
+        </div>
+        <div class="ft-row">
+          <span class="ft-rank">④</span>
+          <span class="ft-name">スカーミッシュ</span>
+          <span>連番3枚<br><small>（ストレート）</small></span>
+          <span><span class="ex-card blue">5</span><span class="ex-card orange">6</span><span class="ex-card green">7</span></span>
+        </div>
+        <div class="ft-row">
+          <span class="ft-rank">⑤</span>
+          <span class="ft-name">ホスト</span>
+          <span>その他<br><small>（合計値が高い方が勝ち）</small></span>
+          <span><span class="ex-card yellow">3</span><span class="ex-card blue">7</span><span class="ex-card red">10</span></span>
+        </div>
+      </div>
+      <p class="rule-note">同じフォーメーション同士は合計値が高い方が勝ち。同じ合計値の場合は引き分けで旗は獲得されない。</p>
+    </section>
+
+    <section>
+      <h3>📌 その他のルール</h3>
+      <ul class="rule-list">
+        <li>手札は常に7枚（山札が空になると補充なし）</li>
+        <li>1つの旗に同じ陣営は最大3枚まで</li>
+        <li>カードは全部で60枚（6色×数字1〜10）</li>
+        <li>お互いのフラグに置いたカードはすべて公開情報</li>
+      </ul>
+    </section>
+
+    <button class="btn-sm" onclick="closeRules()" style="margin-top:10px;display:block;margin-left:auto;margin-right:auto">閉じる</button>
   </div>
 </div>
 
@@ -1076,6 +1238,16 @@ function potSc(cs) {
   if (df<=2) return 160;
   return 50 + vs.reduce((a,b)=>a+b,0);
 }
+
+// ===== Rules modal =====
+function openRules()  { document.getElementById('rules-modal').classList.add('on'); }
+function closeRules() { document.getElementById('rules-modal').classList.remove('on'); }
+// Esc キーで閉じる
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRules(); });
+// 背景クリックで閉じる
+document.getElementById('rules-modal').addEventListener('click', e => {
+  if (e.target.id === 'rules-modal') closeRules();
+});
 
 // ===== Entry point =====
 window.addEventListener('load', () => {
