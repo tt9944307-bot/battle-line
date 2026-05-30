@@ -1645,8 +1645,9 @@ let peer     = null;
 let conn     = null;
 let G        = {};
 let sel      = null;
-let lastHostCode    = null;
-let disconnectTimer = null;
+let lastHostCode      = null;
+let disconnectTimer   = null;
+let reconnectInterval = null;
 
 // ===== Screen helpers =====
 function showScreen(id) {
@@ -1736,6 +1737,8 @@ function exitMatch() {
 }
 
 function cleanupPeer() {
+  stopReconnectRetry();
+  if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
   if (conn)  { try { conn.close(); } catch(e){} conn = null; }
   if (peer)  { try { peer.destroy(); } catch(e){} peer = null; }
 }
@@ -1798,11 +1801,18 @@ function startAsHost() {
 
     peer.on('error', (err) => {
       if (err.type === 'unavailable-id') {
-        // コードが使用中 → 別のコードで再試行
         try { peer.destroy(); } catch(e) {}
         tryCode();
       } else {
         document.getElementById('wait-status').textContent = 'エラー: ' + err.type;
+      }
+    });
+
+    // ホストのシグナリングサーバー切断対応（バックグラウンド時など）
+    // 同じPeer IDで再接続することでゲストの再接続を受け入れ続ける
+    peer.on('disconnected', () => {
+      if (peer && !peer.destroyed) {
+        setTimeout(() => { try { peer.reconnect(); } catch(e) {} }, 2000);
       }
     });
   }
@@ -1995,10 +2005,26 @@ function onDataFromHost(data) {
 
 function scheduleDisconnect() {
   if (disconnectTimer) return;
+  // ゲスト側：定期リトライ開始
+  if (myRole === 'guest') startReconnectRetry();
   disconnectTimer = setTimeout(() => {
     disconnectTimer = null;
+    stopReconnectRetry();
     if (G && !G.over) { G.over = true; showOverlay('相手との接続が切れました'); }
-  }, 25000); // 25秒の猶予
+  }, 60000); // 60秒の猶予
+}
+
+function startReconnectRetry() {
+  stopReconnectRetry();
+  reconnectInterval = setInterval(() => {
+    if (!G || G.over || !lastHostCode) { stopReconnectRetry(); return; }
+    if (conn && conn.open) { stopReconnectRetry(); return; }
+    reconnectToHost();
+  }, 8000); // 8秒ごとにリトライ
+}
+
+function stopReconnectRetry() {
+  if (reconnectInterval) { clearInterval(reconnectInterval); reconnectInterval = null; }
 }
 
 function reconnectToHost() {
@@ -2009,22 +2035,26 @@ function reconnectToHost() {
     conn = peer.connect(lastHostCode, { reliable: true });
     conn.on('open', () => {
       if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null; }
+      stopReconnectRetry();
       conn.send({ type: 'reconnect' });
     });
     conn.on('data', onDataFromHost);
     conn.on('close', scheduleDisconnect);
-    conn.on('error', () => {});
+    conn.on('error', () => { /* 次のリトライインターバルで再試行 */ });
   });
-  peer.on('error', () => {});
+  peer.on('error', () => { /* 次のリトライインターバルで再試行 */ });
 }
 
-// タブが再び表示されたとき自動再接続（スマホ対策）
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && gameMode === 'online' && myRole === 'guest'
+// タブ復帰 / フォーカス時に即座に再接続試行（iOS Safari対応含む）
+function tryReconnectIfNeeded() {
+  if (gameMode === 'online' && myRole === 'guest'
       && G && !G.over && lastHostCode && (!conn || !conn.open)) {
     reconnectToHost();
   }
-});
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) tryReconnectIfNeeded(); });
+window.addEventListener('pageshow', tryReconnectIfNeeded);
+window.addEventListener('focus', tryReconnectIfNeeded);
 
 // ===== Deck helpers =====
 function mkDeck() {
