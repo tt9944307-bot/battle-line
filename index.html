@@ -330,6 +330,50 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
 
 .opp-label { font-size: 0.7em; opacity: 0.6; text-align: center; }
 
+/* 最後に置いたカードのハイライト */
+.card.last-p {
+  border-color: #3af !important;
+  box-shadow: 0 0 10px rgba(51,170,255,0.8), 0 2px 5px rgba(0,0,0,0.4);
+  animation: lastP 0.6s ease-out;
+}
+.card.last-a {
+  border-color: #f64 !important;
+  box-shadow: 0 0 10px rgba(255,100,60,0.8), 0 2px 5px rgba(0,0,0,0.4);
+  animation: lastA 0.6s ease-out;
+}
+@keyframes lastP { from { box-shadow: 0 0 24px rgba(51,170,255,1); } to { box-shadow: 0 0 10px rgba(51,170,255,0.8); } }
+@keyframes lastA { from { box-shadow: 0 0 24px rgba(255,100,60,1);  } to { box-shadow: 0 0 10px rgba(255,100,60,0.8);  } }
+
+/* プロフィール画面 */
+#scr-profile {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 70vh; gap: 14px; text-align: center;
+}
+#scr-profile h2 { font-size: 1.3em; }
+#profile-name-input {
+  background: rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.3);
+  color: #fff; font-size: 1.3em; padding: 10px 16px;
+  border-radius: 8px; outline: none; text-align: center; width: 240px;
+}
+#profile-name-input:focus { border-color: #ffd700; }
+
+/* ユーザーチップ（メニュー用） */
+#user-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(0,0,0,0.3); padding: 6px 14px;
+  border-radius: 12px; font-size: 0.8em; flex-wrap: wrap; justify-content: center;
+}
+#user-bar .uname { color: #ffd700; font-weight: bold; }
+#user-bar .stats-txt { opacity: 0.75; }
+
+/* 退出ボタン */
+.exit-btn {
+  background: rgba(200,50,50,0.2); border: 1.5px solid rgba(200,80,80,0.5);
+  color: #f88; font-size: 0.75em; padding: 4px 10px;
+  border-radius: 10px; cursor: pointer; transition: background 0.15s;
+}
+.exit-btn:hover { background: rgba(200,50,50,0.45); color: #fff; }
+
 /* ルールボタン */
 .rules-btn {
   position: fixed; top: 10px; right: 12px; z-index: 50;
@@ -412,9 +456,27 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
 
 <button class="rules-btn" onclick="openRules()">📖 ルール説明</button>
 
+<!-- ===== PROFILE (初回のみ) ===== -->
+<div id="scr-profile" class="screen" hidden>
+  <h1>⚔ バトルライン ⚔</h1>
+  <h2>ニックネーム設定</h2>
+  <p class="status-text">初回のみ入力してください。以降は自動ログインされます。</p>
+  <input id="profile-name-input" maxlength="12" placeholder="ニックネーム（最大12文字）"
+    onkeydown="if(event.key==='Enter')setupProfile()">
+  <button class="btn-big gold" onclick="setupProfile()" style="margin-top:4px">ゲーム開始 →</button>
+  <p class="rule-note" style="max-width:300px;margin-top:8px">
+    名前はこのデバイスに保存されます。個人情報は入力しないでください。
+  </p>
+</div>
+
 <!-- ===== MENU ===== -->
 <div id="scr-menu" class="screen">
   <h1>⚔ バトルライン ⚔</h1>
+  <div id="user-bar">
+    <span>👤 <span class="uname" id="menu-uname">-</span></span>
+    <span class="stats-txt" id="menu-stats">勝: 0 / 負: 0 / 引: 0</span>
+    <button class="btn-sm" onclick="changeNickname()" style="font-size:0.72em;padding:3px 8px">名前変更</button>
+  </div>
   <button class="btn-big" onclick="startCPUMode()">🤖 CPU と対戦</button>
   <hr class="menu-divider">
   <button class="btn-big gold" onclick="startAsHost()">🌐 部屋を作る（ホスト）</button>
@@ -464,6 +526,7 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
     <span class="chip" id="as">🔴 <span id="opp-label-chip">CPU</span>: 0旗</span>
     <span class="chip" id="dk">山札: 0枚</span>
     <span class="chip" id="msg">...</span>
+    <button class="exit-btn" onclick="exitMatch()">🚪 退出</button>
   </div>
 
   <div>
@@ -595,13 +658,74 @@ let sel      = null;
 
 // ===== Screen helpers =====
 function showScreen(id) {
-  ['scr-menu','scr-waiting','scr-join','scr-connecting','scr-game'].forEach(s => {
+  ['scr-profile','scr-menu','scr-waiting','scr-join','scr-connecting','scr-game'].forEach(s => {
     document.getElementById(s).hidden = (s !== id);
   });
 }
 
 function backToMenu() {
   cleanupPeer();
+  renderMenuStats();
+  showScreen('scr-menu');
+}
+
+// ===== Profile & History =====
+function loadProfile() {
+  try { return JSON.parse(localStorage.getItem('bl-profile')); } catch { return null; }
+}
+function saveProfile(name) {
+  const uuid = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
+  const p = { uuid, name, createdAt: Date.now() };
+  localStorage.setItem('bl-profile', JSON.stringify(p));
+  return p;
+}
+function setupProfile() {
+  const name = document.getElementById('profile-name-input').value.trim();
+  if (!name) { document.getElementById('profile-name-input').style.borderColor='#f64'; return; }
+  saveProfile(name);
+  renderMenuStats();
+  const room = new URLSearchParams(location.search).get('room');
+  if (room) { document.getElementById('code-input').value = room; showScreen('scr-connecting'); connectToHost(room); }
+  else showScreen('scr-menu');
+}
+function changeNickname() {
+  const n = prompt('新しいニックネームを入力してください（最大12文字）');
+  if (!n || !n.trim()) return;
+  const p = loadProfile() || {};
+  p.name = n.trim().slice(0, 12);
+  localStorage.setItem('bl-profile', JSON.stringify(p));
+  renderMenuStats();
+}
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem('bl-history')) || []; } catch { return []; }
+}
+function recordResult(result, pFlags, aFlags, mode) {
+  const hist = loadHistory();
+  hist.push({ date: Date.now(), result, pFlags, aFlags, mode });
+  localStorage.setItem('bl-history', JSON.stringify(hist.slice(-300)));
+}
+function renderMenuStats() {
+  const p = loadProfile();
+  document.getElementById('menu-uname').textContent = p ? p.name : '-';
+  const hist = loadHistory();
+  const w = hist.filter(h => h.result === 'win').length;
+  const l = hist.filter(h => h.result === 'lose').length;
+  const d = hist.filter(h => h.result === 'draw').length;
+  document.getElementById('menu-stats').textContent = `勝: ${w} / 負: ${l} / 引: ${d}`;
+}
+
+// ===== Exit match =====
+function exitMatch() {
+  if (!confirm('マッチを退出しますか？')) return;
+  if (gameMode === 'online' && conn && conn.open) {
+    conn.send({ type: 'forfeit' });
+  }
+  cleanupPeer();
+  G.over = true;
+  gameMode = 'cpu'; myRole = null;
+  document.getElementById('overlay').classList.remove('on');
+  renderMenuStats();
   showScreen('scr-menu');
 }
 
@@ -754,8 +878,10 @@ function guestPerspective() {
     })),
     myTurn: !G.myTurn,
     over: G.over,
-    // winner from guest's perspective
-    winner: G.winner === 'player' ? 'guest' : G.winner === 'ai' ? 'host' : G.winner
+    winner: G.winner === 'player' ? 'guest' : G.winner === 'ai' ? 'host' : G.winner,
+    // ゲスト視点でハイライト情報を反転して送る
+    lastP: G.lastA ? { fi: G.lastA.fi, id: G.lastA.id } : null,
+    lastA: G.lastP ? { fi: G.lastP.fi, id: G.lastP.id } : null
   };
 }
 
@@ -765,60 +891,60 @@ function sendStateToGuest(gameOverMsg) {
 }
 
 function onDataFromGuest(data) {
-  if (data.type !== 'move' || G.over || G.myTurn) return;
+  if (G.over) return;
 
+  if (data.type === 'forfeit') {
+    recordResult('win', G.flags.filter(f=>f.w==='p').length, G.flags.filter(f=>f.w==='a').length, 'online');
+    G.over = true;
+    showOverlay('相手が退出しました\nあなたの勝ち！🎉');
+    render(); return;
+  }
+
+  if (data.type !== 'move' || G.myTurn) return;
   const { flagIndex, card } = data;
   const flag = G.flags[flagIndex];
   if (!flag || flag.w || flag.a.length >= 3) return;
-
-  // Validate card is in guest's hand
   const found = G.ah.find(c => c.id === card.id);
   if (!found) return;
 
   flag.a.push(found);
+  G.lastA = { fi: flagIndex, id: found.id }; // ← ハイライト記録
   G.ah = G.ah.filter(c => c.id !== card.id);
   if (G.deck.length > 0) G.ah.push(G.deck.pop());
-
   autoClaim();
-
-  if (!chkWin()) {
-    G.myTurn = true;
-    render();
-    sendStateToGuest();
-  }
+  if (!chkWin()) { G.myTurn = true; render(); sendStateToGuest(); }
 }
 
 function onDataFromHost(data) {
+  if (G.over) return;
+
+  if (data.type === 'forfeit') {
+    recordResult('win', 0, 0, 'online');
+    G.over = true;
+    showOverlay('相手が退出しました\nあなたの勝ち！🎉');
+    render(); return;
+  }
+
   if (data.type !== 'state') return;
   const s = data.state;
-
   G = {
-    deck: null,
-    deckCount: s.deckCount,
-    ph: s.ph,
-    ah: s.ah,
-    flags: s.flags,
-    myTurn: s.myTurn,
-    over: s.over,
-    winner: s.winner
+    deck: null, deckCount: s.deckCount,
+    ph: s.ph, ah: s.ah, flags: s.flags,
+    myTurn: s.myTurn, over: s.over, winner: s.winner,
+    lastP: s.lastP, lastA: s.lastA  // ← ホストから渡されるハイライト情報
   };
-
   if (s.over) {
-    const wMsg = s.winner === 'guest'  ? 'あなたの勝ち！🎉'
-               : s.winner === 'host'   ? '相手の勝ち...'
-               : '引き分け！';
+    const wMsg = s.winner==='guest' ? 'あなたの勝ち！🎉' : s.winner==='host' ? '相手の勝ち...' : '引き分け！';
+    const result = s.winner==='guest' ? 'win' : s.winner==='host' ? 'lose' : 'draw';
+    recordResult(result, 0, 0, 'online');
     showOverlay(wMsg + (data.gameOverMsg ? '\n' + data.gameOverMsg : ''));
     return;
   }
-
   render();
 }
 
 function onDisconnect() {
-  if (G && !G.over) {
-    G.over = true;
-    showOverlay('相手との接続が切れました');
-  }
+  if (G && !G.over) { G.over = true; showOverlay('相手との接続が切れました'); }
 }
 
 // ===== Deck helpers =====
@@ -905,10 +1031,11 @@ function rAIHand() {
   }
 }
 
-function mkCardEl(card, inHand = false) {
+function mkCardEl(card, inHand = false, hlClass = '') {
   const d = document.createElement('div');
   d.className = `card ${card.c}${inHand ? ' hc' : ''}`;
   if (inHand && sel && sel.id === card.id) d.classList.add('sel');
+  if (hlClass) d.classList.add(hlClass);
   const v = document.createElement('div'); v.className = 'cv'; v.textContent = card.v;
   const s = document.createElement('div'); s.className = 'cs'; s.textContent = CN[card.c];
   d.appendChild(v); d.appendChild(s);
@@ -933,8 +1060,11 @@ function rFlags() {
     const aiBlk = document.createElement('div'); aiBlk.className = 'form-block';
     for (let j = 0; j < 3; j++) {
       const idx = j - (3 - flag.a.length);
-      if (idx >= 0 && idx < flag.a.length) aiBlk.appendChild(mkCardEl(flag.a[idx]));
-      else aiBlk.appendChild(mkSlotEl(false));
+      if (idx >= 0 && idx < flag.a.length) {
+        const c = flag.a[idx];
+        const hl = G.lastA && G.lastA.fi === fi && G.lastA.id === c.id ? 'last-a' : '';
+        aiBlk.appendChild(mkCardEl(c, false, hl));
+      } else aiBlk.appendChild(mkSlotEl(false));
     }
     const aiLbl = document.createElement('div'); aiLbl.className = 'flbl';
     if (flag.a.length === 3) { const f = evForm(flag.a); aiLbl.textContent = f ? FN[f.t] : ''; }
@@ -965,7 +1095,9 @@ function rFlags() {
     const canPlay = G.myTurn && !flag.w && flag.p.length < 3 && sel && !G.over;
     for (let j = 0; j < 3; j++) {
       if (j < flag.p.length) {
-        pBlk.appendChild(mkCardEl(flag.p[j]));
+        const c = flag.p[j];
+        const hl = G.lastP && G.lastP.fi === fi && G.lastP.id === c.id ? 'last-p' : '';
+        pBlk.appendChild(mkCardEl(c, false, hl));
       } else if (j === flag.p.length && canPlay) {
         pBlk.appendChild(mkSlotEl(true, () => playCard(fi)));
       } else {
@@ -1002,6 +1134,7 @@ function playCard(fi) {
 
   const played = sel;
   flag.p.push(played);
+  G.lastP = { fi, id: played.id }; // ← ハイライト記録
   G.ph = G.ph.filter(c => c.id !== played.id);
   sel = null;
 
@@ -1013,7 +1146,6 @@ function playCard(fi) {
     render();
     setTimeout(aiTurn, 750);
   } else {
-    // Online
     G.myTurn = false;
     if (myRole === 'host') {
       if (G.deck.length > 0) G.ph.push(G.deck.pop());
@@ -1022,7 +1154,6 @@ function playCard(fi) {
       render();
       sendStateToGuest();
     } else {
-      // Guest: optimistic local update, then send to host
       render();
       conn.send({ type: 'move', flagIndex: fi, card: played });
     }
@@ -1064,10 +1195,14 @@ function chkWin() {
 function endGame(msg, winnerSide) {
   G.over = true;
   G.winner = winnerSide;
+  // 対戦結果を記録
+  const pc = G.flags.filter(f => f.w === 'p').length;
+  const ac = G.flags.filter(f => f.w === 'a').length;
+  const result = winnerSide === 'player' ? 'win' : winnerSide === 'ai' ? 'lose' : 'draw';
+  if (gameMode === 'cpu') recordResult(result, pc, ac, 'cpu');
+  else if (myRole === 'host') recordResult(result, pc, ac, 'online');
   showOverlay(msg);
-  if (gameMode === 'online' && myRole === 'host') {
-    sendStateToGuest(msg);
-  }
+  if (gameMode === 'online' && myRole === 'host') sendStateToGuest(msg);
   render();
 }
 
@@ -1153,6 +1288,7 @@ function aiTurn() {
   }
   const mv = best || { card: G.ah[0], fi: avail[0].i };
   G.flags[mv.fi].a.push(mv.card);
+  G.lastA = { fi: mv.fi, id: mv.card.id }; // ← ハイライト記録
   G.ah = G.ah.filter(c => c.id !== mv.card.id);
   if (G.deck.length > 0) G.ah.push(G.deck.pop());
   autoClaim();
@@ -1252,12 +1388,19 @@ document.getElementById('rules-modal').addEventListener('click', e => {
 // ===== Entry point =====
 window.addEventListener('load', () => {
   const room = new URLSearchParams(location.search).get('room');
-  if (room) {
-    document.getElementById('code-input').value = room;
-    showScreen('scr-connecting');
-    connectToHost(room);
+  const profile = loadProfile();
+  if (!profile) {
+    // 初回：プロフィール設定画面へ
+    showScreen('scr-profile');
   } else {
-    showScreen('scr-menu');
+    renderMenuStats();
+    if (room) {
+      document.getElementById('code-input').value = room;
+      showScreen('scr-connecting');
+      connectToHost(room);
+    } else {
+      showScreen('scr-menu');
+    }
   }
 });
 </script>
