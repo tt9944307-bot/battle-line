@@ -1169,9 +1169,118 @@ body {
   #rules-box { padding: 20px 16px; }
   .ft-row { grid-template-columns: 22px 0.8fr 1fr auto; font-size: .7em; }
 }
+/* ══════════════════════════════════════════
+   SPLASH SCREEN
+══════════════════════════════════════════ */
+#splash {
+  position: fixed;
+  inset: 0;
+  background: #1A1610;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  gap: 0;
+  transition: opacity .5s ease;
+}
+#splash.out {
+  opacity: 0;
+  pointer-events: none;
+}
+.sp-emblem {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 28px;
+}
+/* パーチメント円 */
+.sp-circle {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 35%, #F8F0DC, #E8D8A8);
+  box-shadow:
+    0 0 0 3px rgba(168,132,42,.6),
+    0 0 0 6px rgba(168,132,42,.2),
+    0 12px 40px rgba(0,0,0,.6);
+}
+/* 内側の細リング */
+.sp-circle::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(168,132,42,.35);
+}
+/* 交差剣 SVG */
+.sp-swords {
+  position: absolute;
+  inset: 16px;
+}
+.sp-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--parchment);
+  letter-spacing: .08em;
+  line-height: 1;
+  animation: spFadeUp .7s ease both;
+}
+.sp-sub {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brass);
+  letter-spacing: .32em;
+  margin-top: 10px;
+  animation: spFadeUp .7s .12s ease both;
+}
+.sp-line {
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--brass), transparent);
+  margin-top: 14px;
+  animation: spFadeUp .7s .2s ease both;
+}
+@keyframes spFadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* エンブレムのアニメーション */
+.sp-emblem {
+  animation: spScale .6s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes spScale {
+  from { opacity: 0; transform: scale(.6); }
+  to   { opacity: 1; transform: scale(1); }
+}
 </style>
 </head>
 <body>
+
+<!-- ══════════════════════════════════════════
+     SPLASH SCREEN
+══════════════════════════════════════════ -->
+<div id="splash">
+  <div class="sp-emblem">
+    <div class="sp-circle"></div>
+    <svg class="sp-swords" viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- 左斜め剣（グリーン太線→真鍮細線） -->
+      <line x1="14" y1="18" x2="74" y2="70" stroke="#2E4A30" stroke-width="9" stroke-linecap="round"/>
+      <line x1="14" y1="18" x2="74" y2="70" stroke="#C9A550" stroke-width="4" stroke-linecap="round"/>
+      <!-- 右斜め剣 -->
+      <line x1="74" y1="18" x2="14" y2="70" stroke="#2E4A30" stroke-width="9" stroke-linecap="round"/>
+      <line x1="74" y1="18" x2="14" y2="70" stroke="#C9A550" stroke-width="4" stroke-linecap="round"/>
+      <!-- 中央ノブ -->
+      <circle cx="44" cy="44" r="8" fill="#A8842A"/>
+      <circle cx="44" cy="44" r="4.5" fill="#F0E6CC"/>
+    </svg>
+  </div>
+  <div class="sp-title">Battle Line</div>
+  <div class="sp-sub">バトルライン</div>
+  <div class="sp-line"></div>
+</div>
 
 <!-- ══════════════════════════════════════════
      PROFILE (初回のみ)
@@ -2367,6 +2476,22 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRules()
 document.getElementById('rules-modal').addEventListener('click', e => {
   if (e.target.id === 'rules-modal') closeRules();
 });
+
+// ===== Splash screen =====
+(function() {
+  const sp = document.getElementById('splash');
+  if (!sp) return;
+  // フォント読み込み後（またはタイムアウト後）にフェードアウト
+  const hide = () => {
+    sp.classList.add('out');
+    setTimeout(() => sp.remove(), 520);
+  };
+  // フォントが読み込まれたら消す（最短1200ms、最長2000ms）
+  const minWait = new Promise(r => setTimeout(r, 1200));
+  const fontWait = document.fonts ? document.fonts.ready : Promise.resolve();
+  Promise.all([minWait, fontWait]).then(hide);
+  setTimeout(hide, 2000); // フォールバック
+})();
 
 // ===== Entry point =====
 window.addEventListener('load', () => {
