@@ -688,8 +688,12 @@ function setupProfile() {
   saveProfile(name);
   renderMenuStats();
   const room = new URLSearchParams(location.search).get('room');
-  if (room) { document.getElementById('code-input').value = room; showScreen('scr-connecting'); connectToHost(room); }
-  else showScreen('scr-menu');
+  if (room) {
+    history.replaceState(null, '', location.pathname);
+    document.getElementById('code-input').value = room;
+    showScreen('scr-connecting');
+    connectToHost(room, true);
+  } else showScreen('scr-menu');
 }
 function changeNickname() {
   const n = prompt('新しいニックネームを入力してください（最大12文字）');
@@ -805,7 +809,7 @@ function copyURL() {
 }
 
 // ===== Guest flow =====
-function connectToHost(code) {
+function connectToHost(code, fromUrl = false) {
   code = code || document.getElementById('code-input').value.trim().toUpperCase();
   if (!code) {
     document.getElementById('join-status').textContent = 'コードを入力してください';
@@ -836,14 +840,27 @@ function connectToHost(code) {
     conn.on('data', onDataFromHost);
     conn.on('close', onDisconnect);
     conn.on('error', e => {
-      showScreen('scr-join');
-      document.getElementById('join-status').textContent = '接続エラー: ' + e.type;
+      cleanupPeer();
+      if (fromUrl) { showScreen('scr-menu'); }
+      else { showScreen('scr-join'); document.getElementById('join-status').textContent = '接続エラー: ' + e.type; }
     });
   });
 
   peer.on('error', err => {
-    showScreen('scr-join');
-    document.getElementById('join-status').textContent = 'エラー: ' + err.type + ' (コードを確認してください)';
+    cleanupPeer();
+    if (fromUrl) {
+      // URL経由の自動接続失敗 → ホストが待機中でない場合はメニューへ戻す
+      showScreen('scr-menu');
+      // メニュー上部に一時メッセージを表示
+      const el = document.getElementById('menu-stats');
+      const orig = el.textContent;
+      el.textContent = '⚠ 部屋が見つかりませんでした。ホストが待機中か確認してください。';
+      el.style.color = '#ffa040';
+      setTimeout(() => { el.style.color = ''; renderMenuStats(); }, 4000);
+    } else {
+      showScreen('scr-join');
+      document.getElementById('join-status').textContent = 'エラー: ' + err.type + ' (コードを確認してください)';
+    }
   });
 }
 
@@ -1398,9 +1415,11 @@ window.addEventListener('load', () => {
   } else {
     renderMenuStats();
     if (room) {
+      // URLからroomパラメータを取り除く（リロード時の再接続防止）
+      history.replaceState(null, '', location.pathname);
       document.getElementById('code-input').value = room;
       showScreen('scr-connecting');
-      connectToHost(room);
+      connectToHost(room, true);  // fromUrl=true: 失敗時はメニューへ戻す
     } else {
       showScreen('scr-menu');
     }
