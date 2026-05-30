@@ -27,7 +27,7 @@
   --c-blue:   #1E52C0;
   --c-green:  #1A8040;
   --c-yellow: #C08C00;
-  --c-orange: #C84C10;
+  --c-orange: #D47800;
   --c-purple: #7820B0;
 }
 
@@ -1742,12 +1742,13 @@ function connectToHost(code, fromUrl = false) {
 function startOnlineGame() {
   sel = null;
   const d = shuf(mkDeck());
+  const hostFirst = Math.random() < 0.5;
   G = {
     deck:  d.slice(14),
     ph:    d.slice(0, 7),
     ah:    d.slice(7, 14),
     flags: Array(9).fill(0).map(() => ({ p: [], a: [], w: null })),
-    myTurn: true,
+    myTurn: hostFirst,
     over: false,
     winner: null
   };
