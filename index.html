@@ -309,8 +309,10 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
   .sec-lbl { font-size: 0.6em; }
   .opp-label { font-size: 0.6em; }
 
-  /* ルールボタンを下部に移動してタイトルとの重なりを回避 */
-  .rules-btn { top: auto; bottom: 16px; right: 12px; font-size: 0.78em; padding: 7px 14px; }
+  /* ルールボタンは右上に固定。h1に padding-right を付けて重ならないようにする */
+  .rules-btn { top: 8px; bottom: auto; right: 10px; font-size: 0.75em; padding: 5px 10px; }
+  h1 { padding-right: 95px; }
+  #scr-menu h1 { font-size: 1.3em; margin-bottom: 12px; padding-right: 95px; }
 }
 
 /* Overlay */
@@ -457,7 +459,7 @@ h1 { font-size: 1.25em; letter-spacing: 4px; text-shadow: 0 2px 8px rgba(0,0,0,0
 </head>
 <body>
 
-<button class="rules-btn" onclick="openRules()">📖 ルール説明</button>
+<button class="rules-btn" onclick="openRules()" hidden>📖 ルール説明</button>
 
 <!-- ===== PROFILE (初回のみ) ===== -->
 <div id="scr-profile" class="screen" hidden>
@@ -664,6 +666,8 @@ function showScreen(id) {
   ['scr-profile','scr-menu','scr-waiting','scr-join','scr-connecting','scr-game'].forEach(s => {
     document.getElementById(s).hidden = (s !== id);
   });
+  // プロフィール設定画面ではルールボタンを非表示（初回セットアップ中は不要）
+  document.querySelector('.rules-btn').hidden = (id === 'scr-profile');
 }
 
 function backToMenu() {
