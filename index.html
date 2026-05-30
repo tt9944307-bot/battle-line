@@ -1247,7 +1247,7 @@ function restartOrMenu() {
   }
 }
 
-// ===== AI (高度化版) =====
+// ===== AI (超強化版 v3) =====
 
 // AIの視点から「未知のカード」= 相手の手札 + 残りデッキ
 function unknownCards() {
@@ -1260,32 +1260,42 @@ function unknownCards() {
   return mkDeck().filter(c => !known.has(c.id));
 }
 
-// pool から n 枚追加したときの最強フォーメーションを返す
+// pool から n 枚追加したときの最強フォーメーションを返す（v2: Wedge/Flush 網羅）
 function bestReachable(cards, pool) {
   const n = 3 - cards.length;
   if (n === 0) return evForm(cards);
   let best = null;
-  const p = pool.length > 50 ? pool.slice(0, 50) : pool;
+  const upd = f => { if (!best || cmpF(f, best) > 0) best = f; };
+
   if (n === 1) {
-    for (const c of p) {
-      const f = evForm([...cards, c]);
-      if (!best || cmpF(f, best) > 0) best = f;
-    }
+    for (const c of pool) upd(evForm([...cards, c]));
   } else if (n === 2) {
-    for (let i = 0; i < p.length; i++)
-      for (let j = i+1; j < p.length; j++) {
-        const f = evForm([...cards, p[i], p[j]]);
-        if (!best || cmpF(f, best) > 0) best = f;
-      }
+    for (let i = 0; i < pool.length; i++)
+      for (let j = i+1; j < pool.length; j++)
+        upd(evForm([...cards, pool[i], pool[j]]));
   } else {
-    // n=3: 上位20枚で試算
-    const top = [...p].sort((a,b) => b.v - a.v).slice(0, 20);
-    for (let i = 0; i < top.length; i++)
-      for (let j = i+1; j < top.length; j++)
-        for (let k = j+1; k < top.length; k++) {
-          const f = evForm([top[i], top[j], top[k]]);
-          if (!best || cmpF(f, best) > 0) best = f;
-        }
+    // n=3（cards が空）: Wedge → Flush → 高カードの順に網羅探索
+    const byColor = {};
+    for (const c of pool) (byColor[c.c] || (byColor[c.c] = [])).push(c);
+    for (const arr of Object.values(byColor)) {
+      arr.sort((a,b) => a.v - b.v);
+      // Wedge（同色連続3枚）
+      for (let i = 0; i < arr.length-2; i++)
+        if (arr[i].v+1===arr[i+1].v && arr[i+1].v+1===arr[i+2].v)
+          upd(evForm([arr[i], arr[i+1], arr[i+2]]));
+      // Flush（同色任意3枚）
+      if (arr.length >= 3)
+        for (let i=0; i<arr.length-2; i++)
+          for (let j=i+1; j<arr.length-1; j++)
+            for (let k=j+1; k<arr.length; k++)
+              upd(evForm([arr[i], arr[j], arr[k]]));
+    }
+    // 高カード上位18枚の組み合わせ（Straight 含む）
+    const top = [...pool].sort((a,b) => b.v - a.v).slice(0, 18);
+    for (let i=0; i<top.length-2; i++)
+      for (let j=i+1; j<top.length-1; j++)
+        for (let k=j+1; k<top.length; k++)
+          upd(evForm([top[i], top[j], top[k]]));
   }
   return best;
 }
@@ -1297,22 +1307,61 @@ function flagStrategicVal(fi) {
   return v;
 }
 
+// 各旗の緊急度スコア（勝利条件に近いほど高い・ブロック必須は大きなマイナス）
+function gameUrgency() {
+  const cl  = G.flags.map(f => f.w);
+  const aiW = cl.filter(c => c === 'a').length;
+  const pW  = cl.filter(c => c === 'p').length;
+  const urg = new Array(9).fill(0);
+
+  // 5本勝利ライン
+  if (aiW >= 4) G.flags.forEach((f,i) => { if (!f.w) urg[i] += 15000; });
+  else if (aiW >= 3) G.flags.forEach((f,i) => { if (!f.w) urg[i] += 2500; });
+  if (pW >= 4)  G.flags.forEach((f,i) => { if (!f.w) urg[i] -= 18000; });
+  else if (pW >= 3) G.flags.forEach((f,i) => { if (!f.w) urg[i] -= 3000; });
+
+  // 3連続勝利ライン
+  for (let s = 0; s <= 6; s++) {
+    const g   = [s, s+1, s+2];
+    const aWg = g.filter(i => cl[i] === 'a').length;
+    const pWg = g.filter(i => cl[i] === 'p').length;
+    const unc = g.filter(i => !cl[i] && G.flags[i].a.length < 3);
+
+    // 相手が2本持っている → 絶対ブロック
+    if (pWg === 2 && aWg === 0) unc.forEach(i => urg[i] -= 12000);
+    else if (pWg === 2)         unc.forEach(i => urg[i] -= 6000);
+    else if (pWg === 1 && aWg === 0) unc.forEach(i => urg[i] -= 700);
+
+    // 自分が2本持っている → 今すぐ勝ち取る
+    if (aWg === 2 && pWg === 0) unc.forEach(i => urg[i] += 10000);
+    else if (aWg === 2)         unc.forEach(i => urg[i] += 5500);
+    else if (aWg === 1 && pWg === 0) unc.forEach(i => urg[i] += 600);
+  }
+  return urg;
+}
+
 function aiTurn() {
   if (G.over) return;
-  const avail = G.flags.map((f,i)=>({f,i})).filter(({f})=>!f.w && f.a.length < 3);
+  const avail = G.flags.map((f,i) => ({f,i})).filter(({f}) => !f.w && f.a.length < 3);
   if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
 
   const unk = unknownCards();
+  const urg = gameUrgency();
+
+  // 各旗の「プレイヤー側ベストフォーメーション」を事前計算（キャッシュ）
+  const pBest = {};
+  for (const {f,i} of avail) pBest[i] = bestReachable(f.p, unk);
+
   let best = null, bsc = -Infinity;
   for (const card of G.ah) {
     for (const {f,i} of avail) {
-      const sc = aiScore(card, f, i, unk);
+      const sc = aiScore(card, f, i, unk, urg, pBest[i]);
       if (sc > bsc) { bsc = sc; best = { card, fi: i }; }
     }
   }
   const mv = best || { card: G.ah[0], fi: avail[0].i };
   G.flags[mv.fi].a.push(mv.card);
-  G.lastA = { fi: mv.fi, id: mv.card.id }; // ← ハイライト記録
+  G.lastA = { fi: mv.fi, id: mv.card.id };
   G.ah = G.ah.filter(c => c.id !== mv.card.id);
   if (G.deck.length > 0) G.ah.push(G.deck.pop());
   autoClaim();
@@ -1321,82 +1370,119 @@ function aiTurn() {
   render();
 }
 
-function aiScore(card, flag, fi, unk) {
+function aiScore(card, flag, fi, unk, urg, pBestForm) {
   const sim = [...flag.a, card];
-  let sc = 0;
+  let sc = urg[fi]; // まず緊急度ベース
 
-  // ── 1. フォーメーション価値 ──────────────────────
   if (sim.length === 3) {
+    // ── AI のフォーメーション完成 ──
     const af = evForm(sim);
 
     if (flag.p.length === 3) {
-      // 両者完成 → 直接比較
+      // 両者完成: 直接勝負
       const cmp = cmpF(af, evForm(flag.p));
-      sc += cmp > 0 ? 5000 : cmp < 0 ? -4000 : -800;
+      sc += cmp > 0 ? 11000 : cmp < 0 ? -8000 : -2500;
     } else {
-      // 自分だけ完成 → 相手が取れる最強フォーメーションと比較
-      const bestOpp = bestReachable(flag.p, unk);
-      const cmp = bestOpp ? cmpF(af, bestOpp) : 1;
-      sc += cmp > 0 ? 4000   // どんな手を引かれても勝てる
-          : cmp === 0 ? 500  // 引き次第
-          : 150;             // 負けるかもだが完成は価値あり
-      sc += af.t * 150 + af.sum * 5;
+      // 自分だけ完成: 相手が何を引いても勝てるか？
+      const cmp = pBestForm ? cmpF(af, pBestForm) : 1;
+      if (cmp > 0) {
+        // 確実勝利 → 大ボーナス＋フォーメーション品質加算
+        sc += 9000 + af.t * 600 + af.sum * 50;
+      } else if (cmp === 0) {
+        // 相手が最善を引いたとき引き分け → まず勝てる
+        sc += 3500 + af.t * 300;
+      } else {
+        // 相手が最善を引くと負ける → 完成ボーナスは小さめ
+        sc += 1200 + af.t * 120;
+      }
     }
   } else {
-    // 未完成 → 自分と相手の到達可能最強フォーメーションを比較
-    const bestMine = bestReachable(sim,  unk);
-    const bestOpp  = bestReachable(flag.p, unk);
-    if (bestMine && bestOpp) {
-      const cmp = cmpF(bestMine, bestOpp);
-      sc += cmp > 0 ? 400 : cmp < 0 ? -100 : 0;
+    // ── AI のフォーメーション未完成 ──
+    const bestA = bestReachable(sim, unk);
+
+    if (flag.p.length === 3) {
+      // 相手は完成済: 追いつけるか？
+      if (bestA) {
+        const cmp = cmpF(bestA, evForm(flag.p));
+        if (cmp > 0)      sc += 5000 + sim.length * 400;
+        else if (cmp === 0) sc += 1200;
+        else              sc -= 3500; // 逆転不可: 見切り
+      } else {
+        sc -= 3500;
+      }
+    } else if (bestA && pBestForm) {
+      // 双方未完成: 最善フォーメーション同士を比較
+      const cmp = cmpF(bestA, pBestForm);
+      const gap = Math.abs(bestA.t - pBestForm.t);
+      if (cmp > 0) {
+        sc += 900 + gap * 350;
+        sc += sim.length * 350; // コミット済みフラグへの加点
+      } else if (cmp < 0) {
+        sc -= 180 + gap * 120;
+      }
+      // 相手より多くカードを出していると有利
+      sc += (sim.length - flag.p.length) * 200;
     }
-    sc += potSc(sim) * 12 + card.v * 4;
-    sc += flag.a.length * 100; // 既にカードがある旗を優先
+
+    // ポテンシャル品質（残プールを踏まえた期待値）
+    sc += potSc(sim, unk) * 22 + card.v * 6;
+    if (flag.a.length > 0) sc += flag.a.length * 280; // 途中まで置いた旗を優先
   }
 
-  // ── 2. 数学的に負け確定の旗には投資しない ────────
+  // 数学的に負け確定の旗への無駄打ちを強く抑制
   if (flag.p.length === 3 && sim.length < 3) {
-    const bestMine = bestReachable(sim, unk);
-    if (bestMine && cmpF(bestMine, evForm(flag.p)) < 0) sc -= 1500;
+    const bA = bestReachable(sim, unk);
+    if (bA && cmpF(bA, evForm(flag.p)) < 0) sc -= 4000;
   }
 
-  // ── 3. 旗の戦略的価値（中央ほど重要）────────────
-  sc += flagStrategicVal(fi) * 60;
-
-  // ── 4. 連続フラグの攻防（最重要）────────────────
-  for (let s = 0; s <= 6; s++) {
-    const g = [s, s+1, s+2];
-    if (!g.includes(fi)) continue;
-    const aiW = g.filter(j => G.flags[j].w === 'a').length;
-    const pW  = g.filter(j => G.flags[j].w === 'p').length;
-
-    // 相手の連続勝利をブロック（最優先）
-    if (pW === 2 && !G.flags[fi].w) sc += 2500;
-    else if (pW === 1 && !G.flags[fi].w) sc += 180;
-
-    // 自分の連続勝利を狙う
-    if (aiW === 2 && !G.flags[fi].w) sc += 2000;
-    else if (aiW === 1 && !G.flags[fi].w) sc += 150;
-  }
-
-  // ── 5. 全体的な旗数プレッシャー ──────────────────
-  const totalPW = G.flags.filter(f => f.w === 'p').length;
-  const totalAW = G.flags.filter(f => f.w === 'a').length;
-  if (totalPW >= 4) sc += 400; // 相手があと1本で勝ち → 全力阻止
-  if (totalAW >= 4) sc += 300; // 自分があと1本で勝ち → 確実に取る
+  // 中央フラグほど重要
+  sc += flagStrategicVal(fi) * 110;
 
   return sc;
 }
 
-function potSc(cs) {
+// ポテンシャルスコア（残プールを踏まえた形成可能性）
+function potSc(cs, pool) {
   if (!cs.length) return 0;
-  if (cs.length === 1) return cs[0].v;
-  const vs = cs.map(x=>x.v).sort((a,b)=>a-b);
-  const sameC = cs.every(x=>x.c===cs[0].c), df = vs[vs.length-1]-vs[0];
-  if (sameC && df<=2) return 500;
-  if (sameC) return 300;
-  if (df<=2) return 160;
-  return 50 + vs.reduce((a,b)=>a+b,0);
+  const vs     = cs.map(x => x.v).sort((a,b) => a-b);
+  const sameC  = cs.every(x => x.c === cs[0].c);
+  const minV   = vs[0], maxV = vs[vs.length-1];
+  const span   = maxV - minV;
+  const isConsec = span === cs.length-1 && new Set(vs).size === vs.length;
+  const pl     = pool || [];
+
+  if (cs.length >= 3) return evForm(cs).t * 100 + evForm(cs).sum;
+
+  // Wedge（同色＋連続）パス
+  if (sameC && isConsec) {
+    if (cs.length === 2) {
+      const canLo = minV > 1  && pl.some(c => c.c === cs[0].c && c.v === minV-1);
+      const canHi = maxV < 10 && pl.some(c => c.c === cs[0].c && c.v === maxV+1);
+      return (canLo || canHi) ? 980 : 430;
+    }
+    // length === 1: 同色カードがプールに2枚以上あるか
+    const sameColorCnt = pl.filter(c => c.c === cs[0].c).length;
+    return sameColorCnt >= 2 ? 700 : 380;
+  }
+
+  // Flush（同色）パス
+  if (sameC) {
+    const cnt = pl.filter(c => c.c === cs[0].c).length;
+    return cs.length === 2 ? 340 + cnt * 12 : 190 + cnt * 9;
+  }
+
+  // Straight（連続）パス
+  if (isConsec) {
+    if (cs.length === 2) {
+      const canLo = minV > 1  && pl.some(c => c.v === minV-1);
+      const canHi = maxV < 10 && pl.some(c => c.v === maxV+1);
+      return (canLo || canHi) ? 240 : 95;
+    }
+    return 150;
+  }
+
+  // 高カード（バラバラ）
+  return 28 + vs.reduce((a,b) => a+b, 0) * 3 / cs.length;
 }
 
 // ===== Rules modal =====
