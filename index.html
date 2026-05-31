@@ -2762,33 +2762,43 @@ function mctsAiTurn() {
       candMoves.push({ card, fi: i });
   if (candMoves.length === 1) { execAIMove(candMoves[0].card, candMoves[0].fi); return; }
 
-  // ── Priority 2: Determinized α-β minimax ────────────────────────────────
-  const scores = new Float64Array(candMoves.length);
-  const counts = new Int32Array(candMoves.length);
-  const t0 = performance.now();
+  // ── Priority 2: Determinized α-β minimax (chunked — yields UI every 20ms) ─
+  const scores  = new Float64Array(candMoves.length);
+  const counts  = new Int32Array(candMoves.length);
+  const t0      = performance.now();
+  let curWorld  = null;
+  let curMi     = candMoves.length; // triggers new world on first chunk
 
-  while (performance.now() - t0 < 4000) {
-    // Sample one plausible world for this iteration
-    const world = mctsDeterminize(G);
+  function abChunk() {
+    const chunkEnd = Math.min(performance.now() + 20, t0 + 4000);
 
-    for (let mi = 0; mi < candMoves.length; mi++) {
-      const { card, fi } = candMoves[mi];
-      // Apply AI's candidate move into the sampled world
-      const sim = abApply(world, card, fi, true);
-      // 2-ply α-β from the opponent's perspective (player moves next)
-      const sc = alphaBeta(sim, 2, -Infinity, Infinity, false);
-      scores[mi] += sc;
-      counts[mi]++;
+    while (performance.now() < chunkEnd) {
+      if (curMi >= candMoves.length) {   // start a new determinized world
+        curWorld = mctsDeterminize(G);
+        curMi    = 0;
+      }
+      const { card, fi } = candMoves[curMi];
+      const sim = abApply(curWorld, card, fi, true);
+      scores[curMi] += alphaBeta(sim, 2, -Infinity, Infinity, false);
+      counts[curMi]++;
+      curMi++;
     }
+
+    if (performance.now() - t0 < 4000) {
+      setTimeout(abChunk, 0); // yield to browser (drag events, reorder, etc.)
+      return;
+    }
+
+    // Budget exhausted — pick best move
+    let bestMi = 0, bestAvg = -Infinity;
+    for (let mi = 0; mi < candMoves.length; mi++) {
+      const avg = counts[mi] > 0 ? scores[mi] / counts[mi] : -Infinity;
+      if (avg > bestAvg) { bestAvg = avg; bestMi = mi; }
+    }
+    execAIMove(candMoves[bestMi].card, candMoves[bestMi].fi);
   }
 
-  // Pick move with best average α-β score
-  let bestMi = 0, bestAvg = -Infinity;
-  for (let mi = 0; mi < candMoves.length; mi++) {
-    const avg = counts[mi] > 0 ? scores[mi] / counts[mi] : -Infinity;
-    if (avg > bestAvg) { bestAvg = avg; bestMi = mi; }
-  }
-  execAIMove(candMoves[bestMi].card, candMoves[bestMi].fi);
+  setTimeout(abChunk, 0);
 }
 
 /** Apply AI move to the real game state and hand off to player. */
