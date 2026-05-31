@@ -1006,6 +1006,60 @@ body {
 }
 #ov-btn:hover  { background: #3A5A3C; transform: translateY(-2px); }
 #ov-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--army-dk); }
+.ov-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+#ov-view-btn {
+  background: transparent;
+  border: 2px solid var(--brass);
+  border-radius: 8px;
+  padding: 11px 28px;
+  font-family: 'Cinzel', serif;
+  font-size: .85em;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: var(--brass-lt);
+  cursor: pointer;
+  transition: background .18s, transform .14s;
+}
+#ov-view-btn:hover  { background: rgba(168,132,42,.15); transform: translateY(-2px); }
+#ov-view-btn:active { transform: translateY(1px); }
+
+/* Game-over board-view bar */
+#game-over-bar {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(20,17,11,.93);
+  border-top: 1px solid var(--brass);
+  padding: 10px 16px;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  z-index: 150;
+  backdrop-filter: blur(4px);
+}
+#game-over-bar.on { display: flex; }
+#game-over-bar button {
+  background: var(--army);
+  border: none;
+  border-radius: 7px;
+  padding: 9px 24px;
+  font-family: 'Cinzel', serif;
+  font-size: .8em;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: var(--parchment);
+  cursor: pointer;
+  box-shadow: 0 2px 0 var(--army-dk);
+  transition: background .15s, transform .12s;
+}
+#game-over-bar button:hover  { background: #3A5A3C; transform: translateY(-1px); }
+#game-over-bar button.secondary {
+  background: transparent;
+  border: 1.5px solid var(--brass);
+  color: var(--brass-lt);
+  box-shadow: none;
+}
+#game-over-bar button.secondary:hover { background: rgba(168,132,42,.15); }
 
 /* ══════════════════════════════════════════
    RULES MODAL
@@ -1634,8 +1688,16 @@ body {
 <div id="overlay">
   <div id="ov-box">
     <div id="ov-msg"></div>
-    <button id="ov-btn" onclick="restartOrMenu()">もう一度プレイ</button>
+    <div class="ov-btns">
+      <button id="ov-btn" onclick="restartOrMenu()">もう一度プレイ</button>
+      <button id="ov-view-btn" onclick="viewBoard()">盤面を見る</button>
+    </div>
   </div>
+</div>
+
+<div id="game-over-bar">
+  <button class="secondary" onclick="showResultOverlay()">結果を見る</button>
+  <button onclick="restartOrMenu()">もう一度プレイ</button>
 </div>
 
 <script>
@@ -2222,83 +2284,68 @@ function rFlags() {
   });
 }
 
-let _dragIdx  = null; // index of card being mouse-dragged
-let _touchDrg = null; // { idx, x0, y0, active } for touch drag
+// Pointer-Events drag state (works for both mouse and touch)
+let _dragPtr          = null;   // { idx, x0, y0, moved, pid }
+let _dragSuppress     = false;  // suppress the click that follows a drag-release
 
 function rPHand() {
   const el = document.getElementById('player-hand');
   el.innerHTML = '';
   (G.ph || []).forEach((card, idx) => {
     const c = mkCardEl(card, true);
-    c.onclick = () => pickCard(card);
     c.dataset.hidx = idx;
 
-    // ── Desktop: HTML5 drag-and-drop ────────────────────────────────────
-    c.draggable = true;
-    c.addEventListener('dragstart', e => {
-      _dragIdx = idx;
-      e.dataTransfer.effectAllowed = 'move';
-      requestAnimationFrame(() => c.classList.add('dragging'));
+    // Click = select card for play (suppressed after a drag)
+    c.onclick = () => {
+      if (_dragSuppress) { _dragSuppress = false; return; }
+      pickCard(card);
+    };
+
+    // ── Unified Pointer Events (mouse + touch) ──────────────────────────
+    c.addEventListener('pointerdown', e => {
+      _dragPtr = { idx, x0: e.clientX, y0: e.clientY, moved: false, pid: e.pointerId };
     });
-    c.addEventListener('dragend', () => {
-      _dragIdx = null;
-      el.querySelectorAll('.dragging,.drag-over').forEach(x =>
-        x.classList.remove('dragging', 'drag-over'));
-    });
-    c.addEventListener('dragover', e => {
-      e.preventDefault();
-      if (_dragIdx !== null && _dragIdx !== idx) {
-        el.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
-        c.classList.add('drag-over');
+
+    c.addEventListener('pointermove', e => {
+      if (!_dragPtr || _dragPtr.pid !== e.pointerId) return;
+      const dist = Math.hypot(e.clientX - _dragPtr.x0, e.clientY - _dragPtr.y0);
+      if (!_dragPtr.moved) {
+        if (dist < 12) return;            // tap threshold — not a drag yet
+        _dragPtr.moved = true;
+        try { c.setPointerCapture(_dragPtr.pid); } catch (_) {}
+        c.classList.add('dragging');
       }
-    });
-    c.addEventListener('drop', e => {
-      e.preventDefault();
-      if (_dragIdx === null || _dragIdx === idx) return;
-      const moved = G.ph.splice(_dragIdx, 1)[0];
-      G.ph.splice(idx, 0, moved);
-      _dragIdx = null;
-      rPHand();
-    });
-
-    // ── Mobile: touch drag (10 px threshold; tap still selects card) ───
-    c.addEventListener('touchstart', e => {
-      const t = e.touches[0];
-      _touchDrg = { idx, x0: t.clientX, y0: t.clientY, active: false };
-    }, { passive: true });
-
-    c.addEventListener('touchmove', e => {
-      if (!_touchDrg) return;
-      const t  = e.touches[0];
-      const dx = t.clientX - _touchDrg.x0;
-      const dy = t.clientY - _touchDrg.y0;
-      if (!_touchDrg.active && Math.hypot(dx, dy) > 10) _touchDrg.active = true;
-      if (!_touchDrg.active) return;
-      e.preventDefault();
-      const over = document.elementFromPoint(t.clientX, t.clientY);
+      e.preventDefault();               // prevent scroll during drag
+      // Highlight the card currently under the pointer
+      const over = document.elementFromPoint(e.clientX, e.clientY);
       const tc   = over?.closest('#player-hand .card');
       el.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
       if (tc && tc !== c) tc.classList.add('drag-over');
     }, { passive: false });
 
-    c.addEventListener('touchend', e => {
-      if (!_touchDrg) return;
-      if (!_touchDrg.active) { _touchDrg = null; return; } // tap — let click fire
-      e.preventDefault(); // drag ended — suppress click
-      const t    = e.changedTouches[0];
-      const over = document.elementFromPoint(t.clientX, t.clientY);
-      const tc   = over?.closest('#player-hand .card');
-      el.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
-      if (tc) {
-        const dest = parseInt(tc.dataset.hidx);
-        if (!isNaN(dest) && dest !== _touchDrg.idx) {
-          const moved = G.ph.splice(_touchDrg.idx, 1)[0];
-          G.ph.splice(dest, 0, moved);
+    const endDrag = e => {
+      if (!_dragPtr || _dragPtr.pid !== e.pointerId) return;
+      el.querySelectorAll('.drag-over,.dragging').forEach(x =>
+        x.classList.remove('drag-over', 'dragging'));
+      if (_dragPtr.moved) {
+        _dragSuppress = true;           // stop the following click from picking a card
+        const over = document.elementFromPoint(e.clientX, e.clientY);
+        const tc   = over?.closest('#player-hand .card');
+        if (tc && tc !== c) {
+          const dest = parseInt(tc.dataset.hidx);
+          if (!isNaN(dest) && dest !== _dragPtr.idx) {
+            const moved = G.ph.splice(_dragPtr.idx, 1)[0];
+            G.ph.splice(dest, 0, moved);
+            _dragPtr = null;
+            rPHand();
+            return;
+          }
         }
       }
-      _touchDrg = null;
-      rPHand();
-    }, { passive: false });
+      _dragPtr = null;
+    };
+    c.addEventListener('pointerup',     endDrag);
+    c.addEventListener('pointercancel', endDrag);
 
     el.appendChild(c);
   });
@@ -2391,8 +2438,19 @@ function showOverlay(msg) {
   document.getElementById('overlay').classList.add('on');
 }
 
+function viewBoard() {
+  document.getElementById('overlay').classList.remove('on');
+  document.getElementById('game-over-bar').classList.add('on');
+}
+
+function showResultOverlay() {
+  document.getElementById('game-over-bar').classList.remove('on');
+  document.getElementById('overlay').classList.add('on');
+}
+
 function restartOrMenu() {
   document.getElementById('overlay').classList.remove('on');
+  document.getElementById('game-over-bar').classList.remove('on');
   if (gameMode === 'online') {
     cleanupPeer();
     gameMode = 'cpu';
