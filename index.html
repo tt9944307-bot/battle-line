@@ -2615,8 +2615,8 @@ function mctsAiTurn() {
       const { card, fi } = candMoves[mi];
       // Apply AI's candidate move into the sampled world
       const sim = abApply(world, card, fi, true);
-      // 3-ply α-β from the opponent's perspective (player moves next)
-      const sc = alphaBeta(sim, 3, -Infinity, Infinity, false);
+      // 2-ply α-β from the opponent's perspective (player moves next)
+      const sc = alphaBeta(sim, 2, -Infinity, Infinity, false);
       scores[mi] += sc;
       counts[mi]++;
     }
