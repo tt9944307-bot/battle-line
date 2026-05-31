@@ -926,6 +926,15 @@ body {
 .card.last-p { border-color: #3af !important; animation: lastP .7s ease infinite; }
 .card.last-a { border-color: #f64 !important; animation: lastA .7s ease infinite; }
 
+/* Hand-card drag-to-reorder */
+#player-hand .card.hc           { cursor: grab; }
+#player-hand .card.hc.dragging  { opacity: .32; transform: scale(.91); cursor: grabbing; }
+#player-hand .card.hc.drag-over {
+  border-color: #d4af37 !important;
+  box-shadow: 0 0 0 2px #d4af37, 0 10px 20px rgba(0,0,0,.4);
+  transform: translateY(-12px);
+}
+
 /* Player hand */
 #player-hand {
   display: flex;
@@ -2213,12 +2222,84 @@ function rFlags() {
   });
 }
 
+let _dragIdx  = null; // index of card being mouse-dragged
+let _touchDrg = null; // { idx, x0, y0, active } for touch drag
+
 function rPHand() {
   const el = document.getElementById('player-hand');
   el.innerHTML = '';
-  (G.ph || []).forEach(card => {
+  (G.ph || []).forEach((card, idx) => {
     const c = mkCardEl(card, true);
     c.onclick = () => pickCard(card);
+    c.dataset.hidx = idx;
+
+    // ── Desktop: HTML5 drag-and-drop ────────────────────────────────────
+    c.draggable = true;
+    c.addEventListener('dragstart', e => {
+      _dragIdx = idx;
+      e.dataTransfer.effectAllowed = 'move';
+      requestAnimationFrame(() => c.classList.add('dragging'));
+    });
+    c.addEventListener('dragend', () => {
+      _dragIdx = null;
+      el.querySelectorAll('.dragging,.drag-over').forEach(x =>
+        x.classList.remove('dragging', 'drag-over'));
+    });
+    c.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (_dragIdx !== null && _dragIdx !== idx) {
+        el.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        c.classList.add('drag-over');
+      }
+    });
+    c.addEventListener('drop', e => {
+      e.preventDefault();
+      if (_dragIdx === null || _dragIdx === idx) return;
+      const moved = G.ph.splice(_dragIdx, 1)[0];
+      G.ph.splice(idx, 0, moved);
+      _dragIdx = null;
+      rPHand();
+    });
+
+    // ── Mobile: touch drag (10 px threshold; tap still selects card) ───
+    c.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      _touchDrg = { idx, x0: t.clientX, y0: t.clientY, active: false };
+    }, { passive: true });
+
+    c.addEventListener('touchmove', e => {
+      if (!_touchDrg) return;
+      const t  = e.touches[0];
+      const dx = t.clientX - _touchDrg.x0;
+      const dy = t.clientY - _touchDrg.y0;
+      if (!_touchDrg.active && Math.hypot(dx, dy) > 10) _touchDrg.active = true;
+      if (!_touchDrg.active) return;
+      e.preventDefault();
+      const over = document.elementFromPoint(t.clientX, t.clientY);
+      const tc   = over?.closest('#player-hand .card');
+      el.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+      if (tc && tc !== c) tc.classList.add('drag-over');
+    }, { passive: false });
+
+    c.addEventListener('touchend', e => {
+      if (!_touchDrg) return;
+      if (!_touchDrg.active) { _touchDrg = null; return; } // tap — let click fire
+      e.preventDefault(); // drag ended — suppress click
+      const t    = e.changedTouches[0];
+      const over = document.elementFromPoint(t.clientX, t.clientY);
+      const tc   = over?.closest('#player-hand .card');
+      el.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+      if (tc) {
+        const dest = parseInt(tc.dataset.hidx);
+        if (!isNaN(dest) && dest !== _touchDrg.idx) {
+          const moved = G.ph.splice(_touchDrg.idx, 1)[0];
+          G.ph.splice(dest, 0, moved);
+        }
+      }
+      _touchDrg = null;
+      rPHand();
+    }, { passive: false });
+
     el.appendChild(c);
   });
 }
