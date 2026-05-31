@@ -2245,7 +2245,7 @@ function playCard(fi) {
     if (chkWin()) return;
     G.myTurn = false;
     render();
-    setTimeout(aiTurn, 750);
+    setTimeout(mctsAiTurn, 60);
   } else {
     G.myTurn = false;
     if (myRole === 'host') {
@@ -2322,7 +2322,224 @@ function restartOrMenu() {
   }
 }
 
-// ===== AI (超強化版 v3) =====
+// ===== AI — MCTS (Determinized Monte Carlo) =====
+
+// ── Simulation helpers ───────────────────────────────────────────────────
+
+/** Win check inside a simulation state. Returns 'ai', 'p', or null. */
+function mctsCheckWin(s) {
+  let aW = 0, pW = 0;
+  for (let i = 0; i < 9; i++) {
+    if (s.flags[i].w === 'a') aW++;
+    else if (s.flags[i].w === 'p') pW++;
+  }
+  if (aW >= 5) return 'ai';
+  if (pW >= 5) return 'p';
+  for (let i = 0; i <= 6; i++) {
+    const f = s.flags;
+    if (f[i].w==='a' && f[i+1].w==='a' && f[i+2].w==='a') return 'ai';
+    if (f[i].w==='p' && f[i+1].w==='p' && f[i+2].w==='p') return 'p';
+  }
+  return null;
+}
+
+/** Fast auto-claim: only when both sides have 3 cards (used in rollouts). */
+function mctsAutoClaim(s) {
+  for (let i = 0; i < 9; i++) {
+    const f = s.flags[i];
+    if (f.w || f.a.length < 3 || f.p.length < 3) continue;
+    const cmp = cmpF(evForm(f.a), evForm(f.p));
+    if (cmp > 0) f.w = 'a'; else if (cmp < 0) f.w = 'p';
+  }
+}
+
+/**
+ * Determinization: sample a random player hand from the cards AI doesn't know.
+ * Returns a new simulation state with plausible ph and shuffled deck.
+ * pTurn = true means it's the player's turn to move next.
+ */
+function mctsDeterminize(G) {
+  // Cards AI can see: own hand + all flag cards
+  const known = new Set(G.ah.map(c => c.id));
+  G.flags.forEach(f => {
+    f.p.forEach(c => known.add(c.id));
+    f.a.forEach(c => known.add(c.id));
+  });
+  const unk = mkDeck().filter(c => !known.has(c.id));
+
+  // Fisher-Yates shuffle
+  for (let i = unk.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    const t = unk[i]; unk[i] = unk[j]; unk[j] = t;
+  }
+
+  return {
+    deck:  unk.slice(G.ph.length),           // remaining cards become deck
+    ph:    unk.slice(0, G.ph.length),         // first N go to player hand
+    ah:    G.ah.slice(),
+    flags: G.flags.map(f => ({ p: f.p.slice(), a: f.a.slice(), w: f.w })),
+    pTurn: true   // player moves next (AI has just placed a card before this)
+  };
+}
+
+/**
+ * Semi-smart rollout move selection.
+ * Priority: complete a flag (2→3) > continue started flag > random.
+ * pTurn=true → player moves; pTurn=false → AI moves.
+ */
+function mctsPickMove(s, isAI) {
+  const hand  = isAI ? s.ah : s.ph;
+  const avail = [];
+  for (let i = 0; i < 9; i++) {
+    const side = isAI ? s.flags[i].a : s.flags[i].p;
+    if (!s.flags[i].w && side.length < 3) avail.push(i);
+  }
+  if (!hand.length || !avail.length) return null;
+
+  // Priority 1: complete any flag (2 cards → add 3rd)
+  for (const card of hand) {
+    for (const fi of avail) {
+      const side = isAI ? s.flags[fi].a : s.flags[fi].p;
+      if (side.length === 2) return { card, fi };
+    }
+  }
+  // Priority 2: continue a started flag (1 card placed)
+  const partial = avail.filter(fi => {
+    const side = isAI ? s.flags[fi].a : s.flags[fi].p;
+    return side.length === 1;
+  });
+  if (partial.length && Math.random() < 0.65) {
+    return {
+      card: hand[(Math.random() * hand.length) | 0],
+      fi:   partial[(Math.random() * partial.length) | 0]
+    };
+  }
+  // Priority 3: random
+  return {
+    card: hand[(Math.random() * hand.length) | 0],
+    fi:   avail[(Math.random() * avail.length) | 0]
+  };
+}
+
+/**
+ * Mutating rollout: play game to completion with semi-smart random moves.
+ * Returns 'ai', 'p', or 'draw'.
+ */
+function mctsRollout(s) {
+  for (let depth = 0; depth < 100; depth++) {
+    const winner = mctsCheckWin(s);
+    if (winner) return winner;
+
+    const isAI = !s.pTurn;   // pTurn=true → player moves; false → AI
+    const mv = mctsPickMove(s, isAI);
+    if (!mv) { s.pTurn = !s.pTurn; continue; } // no move — pass turn
+
+    const side = isAI ? s.flags[mv.fi].a : s.flags[mv.fi].p;
+    side.push(mv.card);
+    if (isAI) {
+      s.ah = s.ah.filter(c => c.id !== mv.card.id);
+      if (s.deck.length) s.ah.push(s.deck.pop());
+    } else {
+      s.ph = s.ph.filter(c => c.id !== mv.card.id);
+      if (s.deck.length) s.ph.push(s.deck.pop());
+    }
+    // After AI plays → player's turn (pTurn=true); after player → AI (pTurn=false)
+    s.pTurn = isAI;
+    mctsAutoClaim(s);
+  }
+  const aW = s.flags.filter(f => f.w === 'a').length;
+  const pW = s.flags.filter(f => f.w === 'p').length;
+  return aW > pW ? 'ai' : pW > aW ? 'p' : 'draw';
+}
+
+// ── Main MCTS entry point ────────────────────────────────────────────────
+
+function mctsAiTurn() {
+  if (G.over) return;
+  const avail = G.flags.map((f,i) => ({f,i})).filter(({f}) => !f.w && f.a.length < 3);
+  if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
+
+  // ── Priority 1: Immediately close a flag where AI's 3rd card wins ───────
+  const unk = unknownCards();
+  const pBestQ = {};
+  for (const {f,i} of avail) {
+    pBestQ[i] = f.p.length === 3 ? evForm(f.p) : bestReachable(f.p, unk);
+  }
+  for (const card of G.ah) {
+    for (const {f,i} of avail) {
+      if (f.a.length !== 2) continue;
+      const af = evForm([...f.a, card]);
+      if (!af) continue;
+      const opp = pBestQ[i];
+      if (!opp || cmpF(af, opp) > 0) { execAIMove(card, i); return; }
+    }
+  }
+
+  // ── If only 1 legal move, just play it ───────────────────────────────────
+  const candMoves = [];
+  for (const card of G.ah)
+    for (const {i} of avail)
+      candMoves.push({ card, fi: i });
+  if (candMoves.length === 1) { execAIMove(candMoves[0].card, candMoves[0].fi); return; }
+
+  // ── Priority 2: MCTS over determinized worlds ────────────────────────────
+  const wins   = new Float32Array(candMoves.length);
+  const trials = new Float32Array(candMoves.length);
+  const t0 = performance.now();
+
+  while (performance.now() - t0 < 650) {
+    // Sample one plausible world
+    const world = mctsDeterminize(G);
+
+    for (let mi = 0; mi < candMoves.length; mi++) {
+      const { card, fi } = candMoves[mi];
+      // Clone world for this candidate (cards are immutable objects, array-clone is enough)
+      const sim = {
+        deck:  world.deck.slice(),
+        ph:    world.ph.slice(),
+        ah:    world.ah.slice(),
+        flags: world.flags.map(f => ({ p: f.p.slice(), a: f.a.slice(), w: f.w })),
+        pTurn: true  // player goes next after AI's candidate move
+      };
+      // Apply candidate AI move
+      sim.flags[fi].a.push(card);
+      sim.ah = sim.ah.filter(c => c.id !== card.id);
+      if (sim.deck.length) sim.ah.push(sim.deck.pop());
+      mctsAutoClaim(sim);
+
+      // Rollout to game end
+      const result = mctsCheckWin(sim) || mctsRollout(sim);
+      trials[mi]++;
+      if      (result === 'ai')   wins[mi]++;
+      else if (result === 'draw') wins[mi] += 0.5;
+    }
+  }
+
+  // Pick move with best win rate (most trials as tiebreak)
+  let bestMi = 0, bestRate = -1;
+  for (let mi = 0; mi < candMoves.length; mi++) {
+    const t = trials[mi];
+    const rate = t > 0 ? wins[mi] / t : 0.5;
+    if (rate > bestRate || (rate === bestRate && t > trials[bestMi])) {
+      bestRate = rate; bestMi = mi;
+    }
+  }
+  execAIMove(candMoves[bestMi].card, candMoves[bestMi].fi);
+}
+
+/** Apply AI move to the real game state and hand off to player. */
+function execAIMove(card, fi) {
+  G.flags[fi].a.push(card);
+  G.lastA = { fi, id: card.id };
+  G.ah = G.ah.filter(c => c.id !== card.id);
+  if (G.deck.length > 0) G.ah.push(G.deck.pop());
+  autoClaim();
+  if (chkWin()) return;
+  G.myTurn = true;
+  render();
+}
+
+// ===== AI — Heuristic scoring (used for analysis / bestReachable) =====
 
 function unknownCards() {
   const known = new Set();
@@ -2435,60 +2652,25 @@ function gameUrgency() {
   return urg;
 }
 
+// Heuristic AI kept for reference (no longer called — mctsAiTurn is used instead)
 function aiTurn() {
   if (G.over) return;
   const avail = G.flags.map((f,i) => ({f,i})).filter(({f}) => !f.w && f.a.length < 3);
   if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
   const unk = unknownCards();
   const urg = gameUrgency();
-
-  // Pre-compute player's best reachable formation per flag
   const pBest = {};
   for (const {f,i} of avail) {
     pBest[i] = f.p.length === 3 ? evForm(f.p) : bestReachable(f.p, unk);
   }
-
-  // ── Priority 1: Immediately close out a flag where AI's 3rd card wins ──
-  for (const card of G.ah) {
-    for (const {f,i} of avail) {
-      if (f.a.length !== 2) continue; // need exactly 2 cards already down
-      const sim = [...f.a, card];
-      const af = evForm(sim);
-      if (!af) continue;
-      const opponent = f.p.length === 3 ? evForm(f.p) : pBest[i];
-      if (!opponent || cmpF(af, opponent) > 0) {
-        // Winning completion — play it immediately
-        const mv = { card, fi: i };
-        G.flags[mv.fi].a.push(mv.card);
-        G.lastA = { fi: mv.fi, id: mv.card.id };
-        G.ah = G.ah.filter(c => c.id !== mv.card.id);
-        if (G.deck.length > 0) G.ah.push(G.deck.pop());
-        autoClaim();
-        if (chkWin()) return;
-        G.myTurn = true;
-        render();
-        return;
-      }
-    }
-  }
-
-  // ── Priority 2: Full scoring evaluation ────────────────────────────────
   let best = null, bsc = -Infinity;
-  for (const card of G.ah) {
+  for (const card of G.ah)
     for (const {f,i} of avail) {
       const sc = aiScore(card, f, i, unk, urg, pBest[i]);
       if (sc > bsc) { bsc = sc; best = { card, fi: i }; }
     }
-  }
   const mv = best || { card: G.ah[0], fi: avail[0].i };
-  G.flags[mv.fi].a.push(mv.card);
-  G.lastA = { fi: mv.fi, id: mv.card.id };
-  G.ah = G.ah.filter(c => c.id !== mv.card.id);
-  if (G.deck.length > 0) G.ah.push(G.deck.pop());
-  autoClaim();
-  if (chkWin()) return;
-  G.myTurn = true;
-  render();
+  execAIMove(mv.card, mv.fi);
 }
 
 function aiScore(card, flag, fi, unk, urg, pBestForm) {
