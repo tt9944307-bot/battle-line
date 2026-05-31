@@ -970,17 +970,19 @@ body {
   background: var(--surface);
   border: 2px solid var(--brass);
   border-radius: 18px;
-  padding: 40px 48px;
+  padding: 36px 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
   text-align: center;
   box-shadow:
     0 0 0 1px var(--parchment-dk),
     0 0 60px rgba(168,132,42,.15),
     0 30px 80px rgba(0,0,0,.6);
-  max-width: 90vw;
+  width: min(340px, 90vw);
+  max-height: 90dvh;
+  overflow-y: auto;
 }
 #ov-msg {
   font-family: 'Cinzel Decorative', serif;
@@ -1006,16 +1008,25 @@ body {
 }
 #ov-btn:hover  { background: #3A5A3C; transform: translateY(-2px); }
 #ov-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--army-dk); }
-.ov-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.ov-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.ov-btns button {
+  width: 100%;
+  box-sizing: border-box;
+}
 #ov-view-btn {
   background: transparent;
   border: 2px solid var(--brass);
   border-radius: 8px;
-  padding: 11px 28px;
+  padding: 11px 20px;
   font-family: 'Cinzel', serif;
   font-size: .85em;
   font-weight: 700;
-  letter-spacing: .14em;
+  letter-spacing: .1em;
   color: var(--brass-lt);
   cursor: pointer;
   transition: background .18s, transform .14s;
