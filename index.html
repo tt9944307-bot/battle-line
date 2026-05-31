@@ -2459,15 +2459,17 @@ function abFormVal(cards) {
   if (!cards.length) return 0;
   if (cards.length >= 3) {
     const f = evForm(cards);
-    return f ? f.t * 450 + f.sum * 14 : 0;
+    return f ? f.t * 500 + f.sum * 15 : 0;
   }
   const vs  = cards.map(c => c.v);
   const sc  = cards.every(c => c.c === cards[0].c);
   const sp  = Math.max(...vs) - Math.min(...vs);
+  const tok = vs.length > 1 && vs[0] === vs[1];
   const sum = vs.reduce((a, b) => a + b, 0);
-  if (sc && sp <= cards.length - 1) return sum * 25;
-  if (sc)                            return sum * 18;
-  if (sp <= cards.length - 1)        return sum * 14;
+  if (sc && sp <= cards.length - 1) return sum * 32;  // ウェッジ種
+  if (tok)                           return sum * 27;  // ファランクス種
+  if (sc)                            return sum * 21;  // バタリオン種
+  if (sp <= cards.length - 1)        return sum * 17;  // スカーミッシュ種
   return sum * 8;
 }
 
@@ -2517,7 +2519,7 @@ function abApply(s, card, fi, isAI) {
   return ns;
 }
 
-const AB_MAX_BRANCH = 10;
+const AB_MAX_BRANCH = 20;
 
 function alphaBeta(s, depth, alpha, beta, isAI) {
   const winner = mctsCheckWin(s);
@@ -2537,16 +2539,23 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
     return alphaBeta({ ...s, pTurn: !isAI }, depth, alpha, beta, !isAI);
   }
 
-  // Build + sort candidate moves by priority
+  // Build + sort candidate moves by priority (formation-aware)
   const moves = [];
   for (const card of hand) {
     for (const fi of avail) {
       const cur = isAI ? s.flags[fi].a : s.flags[fi].p;
       const opp = isAI ? s.flags[fi].p : s.flags[fi].a;
-      let pri = cur.length === 2 ? 9000 + card.v
-              : cur.length === 1 ? 4000 + abFormVal([...cur, card])
-              : card.v * 20;
-      if (opp.length === 2) pri += 2000;
+      const combined = [...cur, card];
+      let pri;
+      if (cur.length === 2) {
+        // フラッグを完成させる手 — 役の強さ(t)で優先
+        const form = evForm(combined);
+        pri = form ? 8000 + form.t * 900 + form.sum : 7000 + card.v;
+      } else {
+        // 0〜1枚 — 役の種になるかどうかで優先
+        pri = abFormVal(combined) * 3;
+      }
+      if (opp.length === 2) pri += 3500;  // 相手のフラッグ完成をブロック
       moves.push({ card, fi, pri });
     }
   }
@@ -2607,7 +2616,7 @@ function mctsAiTurn() {
   const counts = new Int32Array(candMoves.length);
   const t0 = performance.now();
 
-  while (performance.now() - t0 < 1800) {
+  while (performance.now() - t0 < 4000) {
     // Sample one plausible world for this iteration
     const world = mctsDeterminize(G);
 
