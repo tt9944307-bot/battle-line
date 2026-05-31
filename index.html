@@ -2454,46 +2454,79 @@ function mctsRollout(s) {
 
 // ── α-β Determinized Minimax ─────────────────────────────────────────────
 
-/** Formation potential for 1-2 partial cards (≥3 uses evForm). */
+/** Formation potential for move-ordering (fast, O(1)).
+ *  Properly ranks all 5 formation types including phalanx seeds. */
 function abFormVal(cards) {
   if (!cards.length) return 0;
   if (cards.length >= 3) {
     const f = evForm(cards);
     return f ? f.t * 500 + f.sum * 15 : 0;
   }
-  const vs  = cards.map(c => c.v);
-  const sc  = cards.every(c => c.c === cards[0].c);
-  const sp  = Math.max(...vs) - Math.min(...vs);
-  const tok = vs.length > 1 && vs[0] === vs[1];
-  const sum = vs.reduce((a, b) => a + b, 0);
-  if (sc && sp <= cards.length - 1) return sum * 32;  // ウェッジ種
-  if (tok)                           return sum * 27;  // ファランクス種
-  if (sc)                            return sum * 21;  // バタリオン種
-  if (sp <= cards.length - 1)        return sum * 17;  // スカーミッシュ種
+  const vs   = cards.map(c => c.v).sort((a, b) => a - b);
+  const sc   = cards.every(c => c.c === cards[0].c);
+  const sp   = vs[vs.length - 1] - vs[0];
+  const uniq = new Set(vs).size === vs.length;
+  const tok  = !uniq; // same value = phalanx seed
+  const sum  = vs.reduce((a, b) => a + b, 0);
+  if (sc && sp <= cards.length - 1 && uniq) return sum * 32; // ウェッジ種
+  if (tok)                                   return sum * 27; // ファランクス種
+  if (sc)                                    return sum * 21; // バタリオン種
+  if (sp <= cards.length - 1 && uniq)        return sum * 17; // スカーミッシュ種
   return sum * 8;
 }
 
-/** Leaf evaluation: flag ownership + run threats + formation potentials. */
+/** Leaf evaluation using bestReachable to compare achievable formations per flag.
+ *  Pool = each side's current hand (determinized, fully known in sim state).
+ *  This correctly values wedge > phalanx > battalion > skirmish > host. */
 function abEval(s) {
   let sc = 0;
   const cl = s.flags.map(f => f.w);
+
   for (let i = 0; i < 9; i++) {
     const f = s.flags[i];
-    if (f.w === 'a') { sc += 2800; continue; }
-    if (f.w === 'p') { sc -= 2800; continue; }
-    sc += abFormVal(f.a) - abFormVal(f.p);
+    if (f.w === 'a') { sc += 5000; continue; }
+    if (f.w === 'p') { sc -= 5000; continue; }
+
+    // Skip completely empty flags — bestReachable([], hand) is expensive and
+    // the run-bonus section below already captures positional value.
+    if (!f.a.length && !f.p.length) continue;
+
+    // Pool = own hand cards not already at this flag
+    const aPlaced = new Set(f.a.map(c => c.id));
+    const pPlaced = new Set(f.p.map(c => c.id));
+    const aPool   = s.ah.filter(c => !aPlaced.has(c.id));
+    const pPool   = s.ph.filter(c => !pPlaced.has(c.id));
+
+    // Best 3-card formation each side can reach from current cards + hand
+    const aBest = bestReachable(f.a, aPool);
+    const pBest = bestReachable(f.p, pPool);
+
+    const cmp = cmpF(aBest, pBest);
+    if (cmp > 0) {
+      // AI leads at this flag
+      sc += 1800 + (aBest ? aBest.t * 300 + aBest.sum * 20 : 0);
+    } else if (cmp < 0) {
+      // Player leads at this flag
+      sc -= 1800 + (pBest ? pBest.t * 300 + pBest.sum * 20 : 0);
+    } else {
+      // Tied best formation — momentum bonus for whoever has more cards placed
+      sc += (f.a.length - f.p.length) * 80;
+    }
   }
+
+  // Strategic 3-flag run bonuses
   for (let i = 0; i <= 6; i++) {
     const g  = [i, i + 1, i + 2];
     const aW = g.filter(j => cl[j] === 'a').length;
     const pW = g.filter(j => cl[j] === 'p').length;
-    if      (aW === 2 && pW === 0) sc += 2400;
-    else if (aW === 2)             sc +=  950;
-    else if (aW === 1 && pW === 0) sc +=  260;
-    if      (pW === 2 && aW === 0) sc -= 2400;
-    else if (pW === 2)             sc -=  950;
-    else if (pW === 1 && aW === 0) sc -=  260;
+    if      (aW === 2 && pW === 0) sc += 3200;
+    else if (aW === 2)             sc += 1100;
+    else if (aW === 1 && pW === 0) sc +=  320;
+    if      (pW === 2 && aW === 0) sc -= 3200;
+    else if (pW === 2)             sc -= 1100;
+    else if (pW === 1 && aW === 0) sc -=  320;
   }
+
   return sc;
 }
 
@@ -2539,7 +2572,7 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
     return alphaBeta({ ...s, pTurn: !isAI }, depth, alpha, beta, !isAI);
   }
 
-  // Build + sort candidate moves by priority (formation-aware)
+  // Build + sort candidate moves by priority (formation-type aware)
   const moves = [];
   for (const card of hand) {
     for (const fi of avail) {
@@ -2548,14 +2581,17 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
       const combined = [...cur, card];
       let pri;
       if (cur.length === 2) {
-        // フラッグを完成させる手 — 役の強さ(t)で優先
+        // フラッグ完成 — 役の強さ(t=5:Wedge〜1:Host)で優先度を大きく分ける
         const form = evForm(combined);
         pri = form ? 8000 + form.t * 900 + form.sum : 7000 + card.v;
+      } else if (cur.length === 1) {
+        // 1枚目追加 — 役の種の強さで優先（Wedge種 > Phalanx種 > Battalion > ...）
+        pri = 3000 + abFormVal(combined);
       } else {
-        // 0〜1枚 — 役の種になるかどうかで優先
-        pri = abFormVal(combined) * 3;
+        // 空フラッグ — 高いカードを優先（将来の種として価値が高い）
+        pri = abFormVal([card]);
       }
-      if (opp.length === 2) pri += 3500;  // 相手のフラッグ完成をブロック
+      if (opp.length === 2) pri += 4000;  // 相手のフラッグ完成を最優先でブロック
       moves.push({ card, fi, pri });
     }
   }
