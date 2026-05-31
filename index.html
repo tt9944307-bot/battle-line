@@ -2452,6 +2452,126 @@ function mctsRollout(s) {
   return aW > pW ? 'ai' : pW > aW ? 'p' : 'draw';
 }
 
+// ── α-β Determinized Minimax ─────────────────────────────────────────────
+
+/** Formation potential for 1-2 partial cards (≥3 uses evForm). */
+function abFormVal(cards) {
+  if (!cards.length) return 0;
+  if (cards.length >= 3) {
+    const f = evForm(cards);
+    return f ? f.t * 450 + f.sum * 14 : 0;
+  }
+  const vs  = cards.map(c => c.v);
+  const sc  = cards.every(c => c.c === cards[0].c);
+  const sp  = Math.max(...vs) - Math.min(...vs);
+  const sum = vs.reduce((a, b) => a + b, 0);
+  if (sc && sp <= cards.length - 1) return sum * 25;
+  if (sc)                            return sum * 18;
+  if (sp <= cards.length - 1)        return sum * 14;
+  return sum * 8;
+}
+
+/** Leaf evaluation: flag ownership + run threats + formation potentials. */
+function abEval(s) {
+  let sc = 0;
+  const cl = s.flags.map(f => f.w);
+  for (let i = 0; i < 9; i++) {
+    const f = s.flags[i];
+    if (f.w === 'a') { sc += 2800; continue; }
+    if (f.w === 'p') { sc -= 2800; continue; }
+    sc += abFormVal(f.a) - abFormVal(f.p);
+  }
+  for (let i = 0; i <= 6; i++) {
+    const g  = [i, i + 1, i + 2];
+    const aW = g.filter(j => cl[j] === 'a').length;
+    const pW = g.filter(j => cl[j] === 'p').length;
+    if      (aW === 2 && pW === 0) sc += 2400;
+    else if (aW === 2)             sc +=  950;
+    else if (aW === 1 && pW === 0) sc +=  260;
+    if      (pW === 2 && aW === 0) sc -= 2400;
+    else if (pW === 2)             sc -=  950;
+    else if (pW === 1 && aW === 0) sc -=  260;
+  }
+  return sc;
+}
+
+/** Shallow-clone sim state and apply one move, then auto-claim. */
+function abApply(s, card, fi, isAI) {
+  const ns = {
+    deck:  s.deck.slice(),
+    ph:    s.ph.slice(),
+    ah:    s.ah.slice(),
+    flags: s.flags.map(f => ({ p: f.p.slice(), a: f.a.slice(), w: f.w })),
+    pTurn: !isAI
+  };
+  if (isAI) {
+    ns.flags[fi].a.push(card);
+    ns.ah = ns.ah.filter(c => c.id !== card.id);
+    if (ns.deck.length) ns.ah.push(ns.deck.pop());
+  } else {
+    ns.flags[fi].p.push(card);
+    ns.ph = ns.ph.filter(c => c.id !== card.id);
+    if (ns.deck.length) ns.ph.push(ns.deck.pop());
+  }
+  mctsAutoClaim(ns);
+  return ns;
+}
+
+const AB_MAX_BRANCH = 10;
+
+function alphaBeta(s, depth, alpha, beta, isAI) {
+  const winner = mctsCheckWin(s);
+  if (winner === 'ai') return  88888 + depth * 50;
+  if (winner === 'p')  return -88888 - depth * 50;
+  if (depth === 0)     return abEval(s);
+
+  const hand  = isAI ? s.ah : s.ph;
+  const avail = [];
+  for (let i = 0; i < 9; i++) {
+    const side = isAI ? s.flags[i].a : s.flags[i].p;
+    if (!s.flags[i].w && side.length < 3) avail.push(i);
+  }
+
+  // No legal move for this side — pass turn
+  if (!hand.length || !avail.length) {
+    return alphaBeta({ ...s, pTurn: !isAI }, depth, alpha, beta, !isAI);
+  }
+
+  // Build + sort candidate moves by priority
+  const moves = [];
+  for (const card of hand) {
+    for (const fi of avail) {
+      const cur = isAI ? s.flags[fi].a : s.flags[fi].p;
+      const opp = isAI ? s.flags[fi].p : s.flags[fi].a;
+      let pri = cur.length === 2 ? 9000 + card.v
+              : cur.length === 1 ? 4000 + abFormVal([...cur, card])
+              : card.v * 20;
+      if (opp.length === 2) pri += 2000;
+      moves.push({ card, fi, pri });
+    }
+  }
+  moves.sort((a, b) => b.pri - a.pri);
+  const top = moves.slice(0, AB_MAX_BRANCH);
+
+  if (isAI) {
+    let v = -Infinity;
+    for (const { card, fi } of top) {
+      v = Math.max(v, alphaBeta(abApply(s, card, fi, true), depth - 1, alpha, beta, false));
+      alpha = Math.max(alpha, v);
+      if (alpha >= beta) break;
+    }
+    return v;
+  } else {
+    let v = Infinity;
+    for (const { card, fi } of top) {
+      v = Math.min(v, alphaBeta(abApply(s, card, fi, false), depth - 1, alpha, beta, true));
+      beta = Math.min(beta, v);
+      if (alpha >= beta) break;
+    }
+    return v;
+  }
+}
+
 // ── Main MCTS entry point ────────────────────────────────────────────────
 
 function mctsAiTurn() {
@@ -2482,47 +2602,31 @@ function mctsAiTurn() {
       candMoves.push({ card, fi: i });
   if (candMoves.length === 1) { execAIMove(candMoves[0].card, candMoves[0].fi); return; }
 
-  // ── Priority 2: MCTS over determinized worlds ────────────────────────────
-  const wins   = new Float32Array(candMoves.length);
-  const trials = new Float32Array(candMoves.length);
+  // ── Priority 2: Determinized α-β minimax ────────────────────────────────
+  const scores = new Float64Array(candMoves.length);
+  const counts = new Int32Array(candMoves.length);
   const t0 = performance.now();
 
-  while (performance.now() - t0 < 650) {
-    // Sample one plausible world
+  while (performance.now() - t0 < 1800) {
+    // Sample one plausible world for this iteration
     const world = mctsDeterminize(G);
 
     for (let mi = 0; mi < candMoves.length; mi++) {
       const { card, fi } = candMoves[mi];
-      // Clone world for this candidate (cards are immutable objects, array-clone is enough)
-      const sim = {
-        deck:  world.deck.slice(),
-        ph:    world.ph.slice(),
-        ah:    world.ah.slice(),
-        flags: world.flags.map(f => ({ p: f.p.slice(), a: f.a.slice(), w: f.w })),
-        pTurn: true  // player goes next after AI's candidate move
-      };
-      // Apply candidate AI move
-      sim.flags[fi].a.push(card);
-      sim.ah = sim.ah.filter(c => c.id !== card.id);
-      if (sim.deck.length) sim.ah.push(sim.deck.pop());
-      mctsAutoClaim(sim);
-
-      // Rollout to game end
-      const result = mctsCheckWin(sim) || mctsRollout(sim);
-      trials[mi]++;
-      if      (result === 'ai')   wins[mi]++;
-      else if (result === 'draw') wins[mi] += 0.5;
+      // Apply AI's candidate move into the sampled world
+      const sim = abApply(world, card, fi, true);
+      // 3-ply α-β from the opponent's perspective (player moves next)
+      const sc = alphaBeta(sim, 3, -Infinity, Infinity, false);
+      scores[mi] += sc;
+      counts[mi]++;
     }
   }
 
-  // Pick move with best win rate (most trials as tiebreak)
-  let bestMi = 0, bestRate = -1;
+  // Pick move with best average α-β score
+  let bestMi = 0, bestAvg = -Infinity;
   for (let mi = 0; mi < candMoves.length; mi++) {
-    const t = trials[mi];
-    const rate = t > 0 ? wins[mi] / t : 0.5;
-    if (rate > bestRate || (rate === bestRate && t > trials[bestMi])) {
-      bestRate = rate; bestMi = mi;
-    }
+    const avg = counts[mi] > 0 ? scores[mi] / counts[mi] : -Infinity;
+    if (avg > bestAvg) { bestAvg = avg; bestMi = mi; }
   }
   execAIMove(candMoves[bestMi].card, candMoves[bestMi].fi);
 }
