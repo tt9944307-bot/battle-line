@@ -1023,43 +1023,18 @@ body {
 #ov-view-btn:hover  { background: rgba(168,132,42,.15); transform: translateY(-2px); }
 #ov-view-btn:active { transform: translateY(1px); }
 
-/* Game-over board-view bar */
-#game-over-bar {
-  display: none;
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  background: rgba(20,17,11,.93);
-  border-top: 1px solid var(--brass);
-  padding: 10px 16px;
-  gap: 12px;
-  justify-content: center;
-  align-items: center;
-  z-index: 150;
-  backdrop-filter: blur(4px);
-}
-#game-over-bar.on { display: flex; }
-#game-over-bar button {
-  background: var(--army);
-  border: none;
-  border-radius: 7px;
-  padding: 9px 24px;
-  font-family: 'Cinzel', serif;
-  font-size: .8em;
-  font-weight: 700;
-  letter-spacing: .14em;
-  color: var(--parchment);
+/* msg chip becomes clickable result banner after game ends */
+#msg.result-chip {
   cursor: pointer;
-  box-shadow: 0 2px 0 var(--army-dk);
-  transition: background .15s, transform .12s;
+  border-color: var(--brass) !important;
+  color: var(--brass-lt) !important;
+  font-weight: 700;
+  animation: resultPulse 2s ease infinite;
 }
-#game-over-bar button:hover  { background: #3A5A3C; transform: translateY(-1px); }
-#game-over-bar button.secondary {
-  background: transparent;
-  border: 1.5px solid var(--brass);
-  color: var(--brass-lt);
-  box-shadow: none;
+@keyframes resultPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(168,132,42,0); }
+  50%      { box-shadow: 0 0 8px 2px rgba(168,132,42,.4); }
 }
-#game-over-bar button.secondary:hover { background: rgba(168,132,42,.15); }
 
 /* ══════════════════════════════════════════
    RULES MODAL
@@ -1695,10 +1670,6 @@ body {
   </div>
 </div>
 
-<div id="game-over-bar">
-  <button class="secondary" onclick="showResultOverlay()">結果を見る</button>
-  <button onclick="restartOrMenu()">もう一度プレイ</button>
-</div>
 
 <script>
 'use strict';
@@ -2189,7 +2160,18 @@ function rStatus() {
   document.getElementById('as').innerHTML  = `🔴 <span id="opp-label-chip">${gameMode==='cpu'?'CPU':'相手'}</span>: ${ac}旗`;
   document.getElementById('dk').textContent = `山札: ${getDeckCount()}枚`;
   const mc = document.getElementById('msg');
-  if (G.over) { mc.textContent = ''; return; }
+  if (G.over) {
+    // Show result in the msg chip; clicking it re-opens the result overlay
+    const label = G.winner === 'player' ? '🏆 勝利 — タップで結果'
+                : G.winner === 'ai'     ? '💀 敗北 — タップで結果'
+                :                         '🤝 引き分け — タップで結果';
+    mc.textContent = label;
+    mc.classList.add('result-chip');
+    mc.onclick = () => document.getElementById('overlay').classList.add('on');
+    return;
+  }
+  mc.classList.remove('result-chip');
+  mc.onclick = null;
   if (G.myTurn) {
     mc.textContent = sel ? `${CN[sel.c]}${sel.v} を選択 → 旗をクリック` : 'カードを選んでください';
   } else {
@@ -2440,17 +2422,11 @@ function showOverlay(msg) {
 
 function viewBoard() {
   document.getElementById('overlay').classList.remove('on');
-  document.getElementById('game-over-bar').classList.add('on');
-}
-
-function showResultOverlay() {
-  document.getElementById('game-over-bar').classList.remove('on');
-  document.getElementById('overlay').classList.add('on');
+  render(); // rStatus() will show the clickable result chip in the info bar
 }
 
 function restartOrMenu() {
   document.getElementById('overlay').classList.remove('on');
-  document.getElementById('game-over-bar').classList.remove('on');
   if (gameMode === 'online') {
     cleanupPeer();
     gameMode = 'cpu';
