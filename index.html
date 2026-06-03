@@ -2607,26 +2607,30 @@ function abFormVal(cards) {
 }
 
 /** Leaf evaluation using bestReachable to compare achievable formations per flag.
- *  Pool = each side's current hand (determinized, fully known in sim state).
- *  This correctly values wedge > phalanx > battalion > skirmish > host. */
+ *  Pool = each side's current hand + next ~8 deck draws, so the eval knows
+ *  whether the completing card for a Wedge/Phalanx is still actually available. */
 function abEval(s) {
   let sc = 0;
   const cl = s.flags.map(f => f.w);
+
+  // Include next ~8 deck cards in each side's pool.
+  // Both players draw alternately, so each gets roughly half.
+  // Using all 8 is a slight over-count but gives a conservative potential estimate.
+  const topDeck = s.deck.slice(-8);
 
   for (let i = 0; i < 9; i++) {
     const f = s.flags[i];
     if (f.w === 'a') { sc += 5000; continue; }
     if (f.w === 'p') { sc -= 5000; continue; }
 
-    // Skip completely empty flags — bestReachable([], hand) is expensive and
-    // the run-bonus section below already captures positional value.
+    // Skip completely empty flags (too expensive with larger pool).
     if (!f.a.length && !f.p.length) continue;
 
-    // Pool = own hand cards not already at this flag
+    // Pool = own hand + upcoming deck draws, minus cards already at this flag
     const aPlaced = new Set(f.a.map(c => c.id));
     const pPlaced = new Set(f.p.map(c => c.id));
-    const aPool   = s.ah.filter(c => !aPlaced.has(c.id));
-    const pPool   = s.ph.filter(c => !pPlaced.has(c.id));
+    const aPool   = [...s.ah.filter(c => !aPlaced.has(c.id)), ...topDeck];
+    const pPool   = [...s.ph.filter(c => !pPlaced.has(c.id)), ...topDeck];
 
     // Best 3-card formation each side can reach from current cards + hand
     const aBest = bestReachable(f.a, aPool);
