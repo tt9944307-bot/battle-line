@@ -2606,52 +2606,97 @@ function abFormVal(cards) {
   return sum * 4;                                             // ホスト種
 }
 
-/** Leaf evaluation using bestReachable to compare achievable formations per flag.
- *  Pool = each side's current hand + next ~8 deck draws, so the eval knows
- *  whether the completing card for a Wedge/Phalanx is still actually available. */
-function abEval(s) {
-  let sc = 0;
-  const cl = s.flags.map(f => f.w);
+/**
+ * bestReachableWithCards: bestReachable + 「どのカードを使うか」を同時に返す。
+ * グローバル評価でのカード競合解決に使用。
+ */
+function bestReachableWithCards(placed, pool) {
+  const n = 3 - placed.length;
+  let best = null, bestNeeded = null;
+  const upd = (f, needed) => {
+    if (f && (!best || cmpF(f, best) > 0)) { best = f; bestNeeded = needed; }
+  };
+  if (n === 0) { const f = evForm(placed); return f ? { form: f, needed: [] } : null; }
+  if (n === 1) {
+    for (const c of pool) upd(evForm([...placed, c]), [c]);
+  } else if (n === 2) {
+    for (let i = 0; i < pool.length; i++)
+      for (let j = i + 1; j < pool.length; j++)
+        upd(evForm([...placed, pool[i], pool[j]]), [pool[i], pool[j]]);
+  }
+  return best ? { form: best, needed: bestNeeded } : null;
+}
 
-  // Include next ~8 deck cards in each side's pool.
-  // Both players draw alternately, so each gets roughly half.
-  // Using all 8 is a slight over-count but gives a conservative potential estimate.
-  const topDeck = s.deck.slice(-8);
+/**
+ * globalOptimalPlan: カード競合を解決したうえで「どの役を同時に完成できるか」を
+ * グリーディ割り当てで評価する。
+ *
+ * 例: フラッグAに[7♥,8♥]、フラッグBに[9♥]が置いてあり、手札に9♥しかない場合、
+ *   独立評価では両フラッグとも高得点に見えるが、
+ *   globalOptimalPlanは「9♥をAで使えばウェッジ完成、その場合Bは別の役」と正しく評価する。
+ */
+function globalOptimalPlan(flags, hand, futureCards, side, earlyGame) {
+  const pool = [...hand, ...futureCards];
 
+  // フラッグごとに「ベスト役 + 必要カード」を計算
+  const tasks = [];
   for (let i = 0; i < 9; i++) {
-    const f = s.flags[i];
-    if (f.w === 'a') { sc += 5000; continue; }
-    if (f.w === 'p') { sc -= 5000; continue; }
-
-    // Skip completely empty flags (too expensive with larger pool).
-    if (!f.a.length && !f.p.length) continue;
-
-    // Pool = own hand + upcoming deck draws, minus cards already at this flag
-    const aPlaced = new Set(f.a.map(c => c.id));
-    const pPlaced = new Set(f.p.map(c => c.id));
-    const aPool   = [...s.ah.filter(c => !aPlaced.has(c.id)), ...topDeck];
-    const pPool   = [...s.ph.filter(c => !pPlaced.has(c.id)), ...topDeck];
-
-    // Best 3-card formation each side can reach from current cards + hand
-    const aBest = bestReachable(f.a, aPool);
-    const pBest = bestReachable(f.p, pPool);
-
-    const cmp = cmpF(aBest, pBest);
-    const earlyGame = G.deck.length >= 15;
-    if (cmp > 0) {
-      // 序盤〜中盤にホスト・スカーミッシュで勝っても役ボーナスなし
-      const fb = aBest ? (earlyGame && aBest.t <= 2 ? 0 : FEVAL[aBest.t]) : 0;
-      sc += 1800 + fb + (aBest ? aBest.sum * 20 : 0);
-    } else if (cmp < 0) {
-      const fb = pBest ? (earlyGame && pBest.t <= 2 ? 0 : FEVAL[pBest.t]) : 0;
-      sc -= 1800 + fb + (pBest ? pBest.sum * 20 : 0);
-    } else {
-      // Tied best formation — momentum bonus for whoever has more cards placed
-      sc += (f.a.length - f.p.length) * 80;
-    }
+    const f = flags[i];
+    if (f.w || f[side].length === 0) continue;
+    const placed  = f[side];
+    const subPool = pool.filter(c => !placed.some(x => x.id === c.id));
+    const res = bestReachableWithCards(placed, subPool);
+    if (res) tasks.push({ i, placed, form: res.form, needed: res.needed });
   }
 
-  // Strategic 3-flag run bonuses
+  // 役が強い順にソート（強いフラッグが先にカードを確保する）
+  tasks.sort((a, b) => cmpF(b.form, a.form));
+
+  // グリーディ割り当て: 同じカードを2フラッグで使わない
+  const usedIds = new Set();
+  let total = 0;
+
+  for (const task of tasks) {
+    const neededIds = task.needed.map(c => c.id);
+    if (neededIds.every(id => !usedIds.has(id))) {
+      neededIds.forEach(id => usedIds.add(id));
+    } else {
+      // 競合: 残余カードで再計算
+      const freePool = pool.filter(c =>
+        !usedIds.has(c.id) && !task.placed.some(x => x.id === c.id));
+      const alt = bestReachableWithCards(task.placed, freePool);
+      if (!alt) continue;
+      task.form = alt.form;
+      alt.needed.forEach(c => usedIds.add(c.id));
+    }
+    const fb = earlyGame && task.form.t <= 2 ? 0 : FEVAL[task.form.t];
+    total += 1800 + fb + task.form.sum * 20;
+  }
+
+  return total;
+}
+
+/**
+ * abEval: フラッグを独立に評価するのではなく、カード競合を解決した
+ * グローバル最適プランで両陣営のスコアを比較する。
+ */
+function abEval(s) {
+  let sc = 0;
+  const cl        = s.flags.map(f => f.w);
+  const earlyGame = G.deck.length >= 15;
+  const future    = s.deck.slice(-8); // 次の約8ドロー
+
+  // 確定フラッグ
+  for (let i = 0; i < 9; i++) {
+    if (s.flags[i].w === 'a') sc += 5000;
+    else if (s.flags[i].w === 'p') sc -= 5000;
+  }
+
+  // カード競合を解決した役プラン評価
+  sc += globalOptimalPlan(s.flags, s.ah, future, 'a', earlyGame);
+  sc -= globalOptimalPlan(s.flags, s.ph, future, 'p', earlyGame);
+
+  // 3連フラッグ戦略ボーナス
   for (let i = 0; i <= 6; i++) {
     const g  = [i, i + 1, i + 2];
     const aW = g.filter(j => cl[j] === 'a').length;
@@ -2709,6 +2754,23 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
     return alphaBeta({ ...s, pTurn: !isAI }, depth, alpha, beta, !isAI);
   }
 
+  // ── ウェッジ保護: 既存ウェッジ種の「唯一の完成カード」を事前に特定 ──────────
+  const thisSide = isAI ? 'a' : 'p';
+  const wedgeOnlyIds = new Set();  // 唯一の完成カード → 他で使うと大ペナルティ
+  const wedgeAnyIds  = new Set();  // 複数ある完成カードの1つ → 中ペナルティ
+  for (let wfi = 0; wfi < 9; wfi++) {
+    const wPlaced = s.flags[wfi][thisSide];
+    if (wPlaced.length !== 2 || s.flags[wfi].w) continue;
+    const wvs = wPlaced.map(c => c.v).sort((a, b) => a - b);
+    if (wPlaced[0].c !== wPlaced[1].c || wvs[1] !== wvs[0] + 1) continue; // ウェッジ種でない
+    const col = wPlaced[0].c;
+    const completers = hand.filter(c => c.c === col && (c.v === wvs[0]-1 || c.v === wvs[1]+1));
+    completers.forEach(c => {
+      if (completers.length === 1) wedgeOnlyIds.add(c.id);
+      else                         wedgeAnyIds.add(c.id);
+    });
+  }
+
   // Build + sort candidate moves by priority (formation-type aware)
   const moves = [];
   for (const card of hand) {
@@ -2716,7 +2778,7 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
       const cur = isAI ? s.flags[fi].a : s.flags[fi].p;
       const opp = isAI ? s.flags[fi].p : s.flags[fi].a;
       const combined  = [...cur, card];
-      const earlyGame = G.deck.length >= 15; // 山札が1/3を超えている = 序盤〜中盤
+      const earlyGame = G.deck.length >= 15;
       let pri;
       if (cur.length === 2) {
         // フラッグ完成
@@ -2744,6 +2806,14 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
         pri = abFormVal([card]);
       }
       if (opp.length === 2) pri += 4000;  // 相手のフラッグ完成を最優先でブロック
+
+      // ウェッジ保護: このカードがウェッジ種の完成カードで、かつここで完成しないなら大ペナルティ
+      const completesWedgeHere = cur.length === 2 && evForm(combined)?.t === FT.W;
+      if (!completesWedgeHere) {
+        if (wedgeOnlyIds.has(card.id)) pri -= 25000; // 唯一の完成カード → ほぼ禁止
+        else if (wedgeAnyIds.has(card.id)) pri -=  6000; // 代替あり → 強い抑制
+      }
+
       moves.push({ card, fi, pri });
     }
   }
@@ -2776,19 +2846,30 @@ function mctsAiTurn() {
   const avail = G.flags.map((f,i) => ({f,i})).filter(({f}) => !f.w && f.a.length < 3);
   if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
 
-  // ── Priority 1: Immediately close a flag where AI's 3rd card wins ───────
-  const unk = unknownCards();
-  const pBestQ = {};
-  for (const {f,i} of avail) {
-    pBestQ[i] = f.p.length === 3 ? evForm(f.p) : bestReachable(f.p, unk);
+  // ── Priority 0: ウェッジは即完成（最強役なのでプレイヤーの「理論最大」と比較しない）
+  for (const card of G.ah) {
+    for (const {f,i} of avail) {
+      if (f.a.length !== 2) continue;
+      const af = evForm([...f.a, card]);
+      if (!af || af.t !== FT.W) continue;
+      // プレイヤーが既に置いたカードのみで比較（理論最大ではなく確定ベスト）
+      const pCommitted = f.p.length === 3 ? evForm(f.p) : null;
+      if (!pCommitted || cmpF(af, pCommitted) > 0) { execAIMove(card, i); return; }
+    }
   }
+
+  // ── Priority 1: プレイヤーが2枚以上置いた旗で、AIの役が勝てるなら即完成 ───
+  const unk = unknownCards();
   for (const card of G.ah) {
     for (const {f,i} of avail) {
       if (f.a.length !== 2) continue;
       const af = evForm([...f.a, card]);
       if (!af) continue;
-      const opp = pBestQ[i];
-      if (!opp || cmpF(af, opp) > 0) { execAIMove(card, i); return; }
+      let opp;
+      if (f.p.length === 3)      opp = evForm(f.p);
+      else if (f.p.length === 2) opp = bestReachable(f.p, unk); // ほぼ確定
+      else continue; // プレイヤー未コミット → 検索に任せる
+      if (cmpF(af, opp) > 0) { execAIMove(card, i); return; }
     }
   }
 
