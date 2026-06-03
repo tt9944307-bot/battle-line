@@ -2839,84 +2839,140 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
   }
 }
 
-// ── Main MCTS entry point ────────────────────────────────────────────────
+// ── 静的評価エンジン（決定的・高速） ───────────────────────────────────────
+//
+// 設計方針:
+//  - ランダムサンプリング(determinization)を廃止。1つの強い評価関数に集約。
+//  - 「役のできやすさ」を bestReachable で評価し、場に残るカード(unseen)で
+//    完成可能性を判定する。
+//  - ウェッジ種を解体する手は、解体後の局面評価が下がるため自然に避けられる。
+
+const FLAG_WON = 2000;   // 旗を確定で取る価値
+// 役タイプ別ウェイト [‑, ホスト, スカーミッシュ, バタリオン, ファランクス, ウェッジ]
+const TYPE_W = [0, 140, 260, 620, 980, 1500];
+// 2枚種の完成見込みボーナス（種の最終到達役タイプ別）
+const SEED_W = [0,  50,  80, 180, 300,  600];
+
+/** 役 {t,sum} を点数化。序盤(earlyGame)はホスト/スカーミッシュを大幅減点。 */
+function formWeight(f, earlyGame) {
+  if (!f) return 0;
+  let w = TYPE_W[f.t] + f.sum * 6;
+  if (earlyGame && f.t <= 2) w *= 0.2;
+  return w;
+}
+
+/** シミュレーション状態で AI から見えないカード（山札＋相手手札）。 */
+function simUnseen(s) {
+  const known = new Set(s.ah.map(c => c.id));
+  s.flags.forEach(f => {
+    f.a.forEach(c => known.add(c.id));
+    f.p.forEach(c => known.add(c.id));
+  });
+  return mkDeck().filter(c => !known.has(c.id));
+}
+
+/** 2枚の種が、残っているカードでどこまでの役を完成できるかのボーナス。 */
+function seedLiveBonus(placed, livePool, earlyGame) {
+  if (placed.length === 1) return 14;       // 1枚: わずかな将来性
+  if (placed.length !== 2) return 0;
+  const pool = livePool.filter(c => !placed.some(x => x.id === c.id));
+  const ceil = bestReachable(placed, pool); // 残カードで届く最高役
+  if (!ceil) return 0;
+  let b = SEED_W[ceil.t];
+  if (earlyGame && ceil.t <= 2) b *= 0.25;  // 序盤のホスト/スカ種はほぼ無価値
+  return b;
+}
+
+/** 1フラッグの片側スコア。ownPool=自分が確実に使えるカード, livePool=完成可能性の判定用。 */
+function sideScore(placed, ownPool, livePool, earlyGame) {
+  if (!placed.length) return 0;
+  if (placed.length === 3) return formWeight(evForm(placed), earlyGame);
+  // 1〜2枚: 自分の手札で届く役(確実性高め) + 残カードでの完成見込み
+  const hp = ownPool.filter(c => !placed.some(x => x.id === c.id));
+  const handBest = bestReachable(placed, hp);
+  let v = handBest ? formWeight(handBest, earlyGame) * 0.45 : 0;
+  v += seedLiveBonus(placed, livePool, earlyGame);
+  v += placed.length * 25; // テンポ（コミット枚数）
+  return v;
+}
+
+/** 局面全体を AI 視点で評価（高いほど AI 有利）。 */
+function evalState(s) {
+  const earlyGame = G.deck.length >= 15;
+  const unseen    = simUnseen(s);
+  const aiLive    = s.ah.concat(unseen); // AI が将来引ける可能性のある全カード
+  let sc = 0;
+  const cl = s.flags.map(f => f.w);
+
+  for (let i = 0; i < 9; i++) {
+    const f = s.flags[i];
+    if (f.w === 'a') { sc += FLAG_WON; continue; }
+    if (f.w === 'p') { sc -= FLAG_WON; continue; }
+    sc += sideScore(f.a, s.ah,  aiLive,  earlyGame); // AI: 確実プール=手札
+    sc -= sideScore(f.p, unseen, unseen, earlyGame); // 相手: 手札不明 → unseen で上限推定
+  }
+
+  // 3連フラッグの脅威
+  for (let i = 0; i <= 6; i++) {
+    const g  = [i, i + 1, i + 2];
+    const aW = g.filter(j => cl[j] === 'a').length;
+    const pW = g.filter(j => cl[j] === 'p').length;
+    if      (aW === 2 && pW === 0) sc += 1500;
+    else if (aW === 2)             sc +=  480;
+    else if (aW === 1 && pW === 0) sc +=  120;
+    if      (pW === 2 && aW === 0) sc -= 1500;
+    else if (pW === 2)             sc -=  480;
+    else if (pW === 1 && aW === 0) sc -=  120;
+  }
+  return sc;
+}
+
+/** AI の手をクローン状態に適用（探索用・ドローはしない=フェア）。 */
+function simApply(base, card, fi) {
+  const flags = base.flags.map(f => ({ p: f.p.slice(), a: f.a.slice(), w: f.w }));
+  flags[fi].a.push(card);
+  const ns = { ah: base.ah.filter(c => c.id !== card.id), flags };
+  mctsAutoClaim(ns);
+  return ns;
+}
+
+// ── メイン: 1手読み + 強い静的評価で着手を選ぶ ──────────────────────────────
 
 function mctsAiTurn() {
   if (G.over) return;
   const avail = G.flags.map((f,i) => ({f,i})).filter(({f}) => !f.w && f.a.length < 3);
   if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
 
-  // ── Priority 0: ウェッジは即完成（最強役なのでプレイヤーの「理論最大」と比較しない）
+  // ── 安全策: ウェッジを即完成できるなら必ず取る（相手の確定役に負けない限り）
   for (const card of G.ah) {
     for (const {f,i} of avail) {
       if (f.a.length !== 2) continue;
       const af = evForm([...f.a, card]);
       if (!af || af.t !== FT.W) continue;
-      // プレイヤーが既に置いたカードのみで比較（理論最大ではなく確定ベスト）
       const pCommitted = f.p.length === 3 ? evForm(f.p) : null;
-      if (!pCommitted || cmpF(af, pCommitted) > 0) { execAIMove(card, i); return; }
+      if (!pCommitted || cmpF(af, pCommitted) > 0) { scheduleAIMove(card, i); return; }
     }
   }
 
-  // ── Priority 1: プレイヤーが2枚以上置いた旗で、AIの役が勝てるなら即完成 ───
-  const unk = unknownCards();
+  // ── 1手読み: 各合法手を適用し、結果局面を評価して最良手を選ぶ
+  let best = null, bestSc = -Infinity;
   for (const card of G.ah) {
-    for (const {f,i} of avail) {
-      if (f.a.length !== 2) continue;
-      const af = evForm([...f.a, card]);
-      if (!af) continue;
-      let opp;
-      if (f.p.length === 3)      opp = evForm(f.p);
-      else if (f.p.length === 2) opp = bestReachable(f.p, unk); // ほぼ確定
-      else continue; // プレイヤー未コミット → 検索に任せる
-      if (cmpF(af, opp) > 0) { execAIMove(card, i); return; }
+    for (const {i} of avail) {
+      const ns = simApply(G, card, i);
+      const w  = mctsCheckWin(ns);
+      const sc = w === 'ai' ?  1e9
+               : w === 'p'  ? -1e9
+               : evalState(ns);
+      if (sc > bestSc) { bestSc = sc; best = { card, fi: i }; }
     }
   }
+  const mv = best || { card: G.ah[0], fi: avail[0].i };
+  scheduleAIMove(mv.card, mv.fi);
+}
 
-  // ── If only 1 legal move, just play it ───────────────────────────────────
-  const candMoves = [];
-  for (const card of G.ah)
-    for (const {i} of avail)
-      candMoves.push({ card, fi: i });
-  if (candMoves.length === 1) { execAIMove(candMoves[0].card, candMoves[0].fi); return; }
-
-  // ── Priority 2: Determinized α-β minimax (chunked — yields UI every 20ms) ─
-  const scores  = new Float64Array(candMoves.length);
-  const counts  = new Int32Array(candMoves.length);
-  const t0      = performance.now();
-  let curWorld  = null;
-  let curMi     = candMoves.length; // triggers new world on first chunk
-
-  function abChunk() {
-    const chunkEnd = Math.min(performance.now() + 20, t0 + 4000);
-
-    while (performance.now() < chunkEnd) {
-      if (curMi >= candMoves.length) {   // start a new determinized world
-        curWorld = mctsDeterminize(G);
-        curMi    = 0;
-      }
-      const { card, fi } = candMoves[curMi];
-      const sim = abApply(curWorld, card, fi, true);
-      scores[curMi] += alphaBeta(sim, 2, -Infinity, Infinity, false);
-      counts[curMi]++;
-      curMi++;
-    }
-
-    if (performance.now() - t0 < 4000) {
-      setTimeout(abChunk, 0); // yield to browser (drag events, reorder, etc.)
-      return;
-    }
-
-    // Budget exhausted — pick best move
-    let bestMi = 0, bestAvg = -Infinity;
-    for (let mi = 0; mi < candMoves.length; mi++) {
-      const avg = counts[mi] > 0 ? scores[mi] / counts[mi] : -Infinity;
-      if (avg > bestAvg) { bestAvg = avg; bestMi = mi; }
-    }
-    execAIMove(candMoves[bestMi].card, candMoves[bestMi].fi);
-  }
-
-  setTimeout(abChunk, 0);
+/** 「考えている」演出の小休止を挟んで着手（その間 UI は応答可能=手札の並べ替え可）。 */
+function scheduleAIMove(card, fi) {
+  setTimeout(() => { if (!G.over) execAIMove(card, fi); }, 450);
 }
 
 /** Apply AI move to the real game state and hand off to player. */
