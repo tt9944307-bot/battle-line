@@ -2582,9 +2582,9 @@ function mctsRollout(s) {
 
 // Non-linear formation base scores indexed by FT value (1-5)
 // W >> P gap widened; S and H halved
-const FBASE = [0,  250,  500, 1500, 2000, 3500]; // move-order base
-const FEVAL = [0,  150,  300,  900, 1200, 2200]; // leaf-eval bonus
-const FPRIO = [0,  450,  900, 2700, 3600, 6000]; // alphaBeta priority
+const FBASE = [0,  250,  500, 1500, 2000, 17500]; // move-order base
+const FEVAL = [0,  150,  300,  900, 1200, 11000]; // leaf-eval bonus
+const FPRIO = [0,  450,  900, 2700, 3600, 30000]; // alphaBeta priority
 
 /** Formation potential for move-ordering (fast, O(1)). */
 function abFormVal(cards) {
@@ -2599,7 +2599,7 @@ function abFormVal(cards) {
   const uniq = new Set(vs).size === vs.length;
   const tok  = !uniq;
   const sum  = vs.reduce((a, b) => a + b, 0);
-  if (sc && sp <= cards.length - 1 && uniq) return sum * 42; // ウェッジ種
+  if (sc && sp <= cards.length - 1 && uniq) return sum * 210; // ウェッジ種
   if (tok)                                   return sum * 22; // ファランクス種
   if (sc)                                    return sum * 14; // バタリオン種
   if (sp <= cards.length - 1 && uniq)        return sum *  9; // スカーミッシュ種
