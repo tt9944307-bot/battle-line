@@ -2633,10 +2633,14 @@ function abEval(s) {
     const pBest = bestReachable(f.p, pPool);
 
     const cmp = cmpF(aBest, pBest);
+    const earlyGame = G.deck.length >= 15;
     if (cmp > 0) {
-      sc += 1800 + (aBest ? FEVAL[aBest.t] + aBest.sum * 20 : 0);
+      // 序盤〜中盤にホスト・スカーミッシュで勝っても役ボーナスなし
+      const fb = aBest ? (earlyGame && aBest.t <= 2 ? 0 : FEVAL[aBest.t]) : 0;
+      sc += 1800 + fb + (aBest ? aBest.sum * 20 : 0);
     } else if (cmp < 0) {
-      sc -= 1800 + (pBest ? FEVAL[pBest.t] + pBest.sum * 20 : 0);
+      const fb = pBest ? (earlyGame && pBest.t <= 2 ? 0 : FEVAL[pBest.t]) : 0;
+      sc -= 1800 + fb + (pBest ? pBest.sum * 20 : 0);
     } else {
       // Tied best formation — momentum bonus for whoever has more cards placed
       sc += (f.a.length - f.p.length) * 80;
@@ -2707,17 +2711,32 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
     for (const fi of avail) {
       const cur = isAI ? s.flags[fi].a : s.flags[fi].p;
       const opp = isAI ? s.flags[fi].p : s.flags[fi].a;
-      const combined = [...cur, card];
+      const combined  = [...cur, card];
+      const earlyGame = G.deck.length >= 15; // 山札が1/3を超えている = 序盤〜中盤
       let pri;
       if (cur.length === 2) {
-        // フラッグ完成 — 役の強さ(t=5:Wedge〜1:Host)で優先度を大きく分ける
+        // フラッグ完成
         const form = evForm(combined);
-        pri = form ? 8000 + FPRIO[form.t] + form.sum : 7000 + card.v;
+        if (form && form.t <= 2 && earlyGame) {
+          // 序盤〜中盤はホスト・スカーミッシュで完成させない
+          pri = -3000;
+        } else {
+          pri = form ? 8000 + FPRIO[form.t] + form.sum : 7000 + card.v;
+        }
       } else if (cur.length === 1) {
-        // 1枚目追加 — 役の種の強さで優先（Wedge種 > Phalanx種 > Battalion > ...）
+        // 1枚目追加 — 役の種の強さで優先
         pri = 3000 + abFormVal(combined);
+        if (earlyGame) {
+          // 序盤はホスト・スカーミッシュの種になる手を抑制
+          const vs2   = combined.map(c => c.v).sort((a, b) => a - b);
+          const sameC = combined.every(c => c.c === combined[0].c);
+          const sp2   = vs2[1] - vs2[0];
+          const sameV = vs2[0] === vs2[1];
+          if (!sameC && !sameV && sp2 > 1) pri -= 2000; // ホスト種
+          else if (!sameC && sp2 === 1)    pri -=  800; // スカーミッシュ種
+        }
       } else {
-        // 空フラッグ — 高いカードを優先（将来の種として価値が高い）
+        // 空フラッグ — 高いカードを優先
         pri = abFormVal([card]);
       }
       if (opp.length === 2) pri += 4000;  // 相手のフラッグ完成を最優先でブロック
