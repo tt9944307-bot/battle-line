@@ -2580,25 +2580,30 @@ function mctsRollout(s) {
 
 // ── α-β Determinized Minimax ─────────────────────────────────────────────
 
-/** Formation potential for move-ordering (fast, O(1)).
- *  Properly ranks all 5 formation types including phalanx seeds. */
+// Non-linear formation base scores indexed by FT value (1-5)
+// W >> P gap widened; S and H halved
+const FBASE = [0,  250,  500, 1500, 2000, 3500]; // move-order base
+const FEVAL = [0,  150,  300,  900, 1200, 2200]; // leaf-eval bonus
+const FPRIO = [0,  450,  900, 2700, 3600, 6000]; // alphaBeta priority
+
+/** Formation potential for move-ordering (fast, O(1)). */
 function abFormVal(cards) {
   if (!cards.length) return 0;
   if (cards.length >= 3) {
     const f = evForm(cards);
-    return f ? f.t * 500 + f.sum * 15 : 0;
+    return f ? FBASE[f.t] + f.sum * 15 : 0;
   }
   const vs   = cards.map(c => c.v).sort((a, b) => a - b);
   const sc   = cards.every(c => c.c === cards[0].c);
   const sp   = vs[vs.length - 1] - vs[0];
   const uniq = new Set(vs).size === vs.length;
-  const tok  = !uniq; // same value = phalanx seed
+  const tok  = !uniq;
   const sum  = vs.reduce((a, b) => a + b, 0);
-  if (sc && sp <= cards.length - 1 && uniq) return sum * 32; // ウェッジ種
-  if (tok)                                   return sum * 27; // ファランクス種
-  if (sc)                                    return sum * 21; // バタリオン種
-  if (sp <= cards.length - 1 && uniq)        return sum * 17; // スカーミッシュ種
-  return sum * 8;
+  if (sc && sp <= cards.length - 1 && uniq) return sum * 42; // ウェッジ種
+  if (tok)                                   return sum * 22; // ファランクス種
+  if (sc)                                    return sum * 14; // バタリオン種
+  if (sp <= cards.length - 1 && uniq)        return sum *  9; // スカーミッシュ種
+  return sum * 4;                                             // ホスト種
 }
 
 /** Leaf evaluation using bestReachable to compare achievable formations per flag.
@@ -2629,11 +2634,9 @@ function abEval(s) {
 
     const cmp = cmpF(aBest, pBest);
     if (cmp > 0) {
-      // AI leads at this flag
-      sc += 1800 + (aBest ? aBest.t * 300 + aBest.sum * 20 : 0);
+      sc += 1800 + (aBest ? FEVAL[aBest.t] + aBest.sum * 20 : 0);
     } else if (cmp < 0) {
-      // Player leads at this flag
-      sc -= 1800 + (pBest ? pBest.t * 300 + pBest.sum * 20 : 0);
+      sc -= 1800 + (pBest ? FEVAL[pBest.t] + pBest.sum * 20 : 0);
     } else {
       // Tied best formation — momentum bonus for whoever has more cards placed
       sc += (f.a.length - f.p.length) * 80;
@@ -2709,7 +2712,7 @@ function alphaBeta(s, depth, alpha, beta, isAI) {
       if (cur.length === 2) {
         // フラッグ完成 — 役の強さ(t=5:Wedge〜1:Host)で優先度を大きく分ける
         const form = evForm(combined);
-        pri = form ? 8000 + form.t * 900 + form.sum : 7000 + card.v;
+        pri = form ? 8000 + FPRIO[form.t] + form.sum : 7000 + card.v;
       } else if (cur.length === 1) {
         // 1枚目追加 — 役の種の強さで優先（Wedge種 > Phalanx種 > Battalion > ...）
         pri = 3000 + abFormVal(combined);
