@@ -2841,16 +2841,21 @@ async function mlInitialize() {
     const topology = await jRes.json();
     const weights  = await bRes.arrayBuffer();
 
-    // InputLayer: batch_shape → batchInputShape
-    // Dense dtype: DTypePolicy dict → "float32"
+    // Keras 3.x → TF.js 4.x 互換パッチ
+    // (1) InputLayer: batch_shape → batchInputShape
+    // (2) Dense dtype: DTypePolicy dict → "float32"
     const cfgLayers = topology.modelTopology.model_config.config.layers;
     for (const l of cfgLayers) {
       const c = l.config;
-      if ('batch_shape' in c)           { c.batchInputShape = c.batch_shape; delete c.batch_shape; }
+      if ('batch_shape' in c)                     { c.batchInputShape = c.batch_shape; delete c.batch_shape; }
       if (c.dtype && typeof c.dtype === 'object') { c.dtype = 'float32'; }
     }
     topology.generatedBy = 'keras v2.15.0';
     topology.modelTopology.keras_version = '2.15.0';
+    // (3) weightsManifest: "ModelName/LayerName/var" → "LayerName/var"
+    for (const entry of topology.weightsManifest) {
+      entry.weights = entry.weights.map(w => ({ ...w, name: w.name.replace(/^[^\/]+\//, '') }));
+    }
 
     const jFile = new File([JSON.stringify(topology)], 'model.json', {type:'application/json'});
     const bFile = new File([weights], 'group1-shard1of1.bin');
