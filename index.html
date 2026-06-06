@@ -1307,90 +1307,23 @@ body {
 }
 
 /* ══════════════════════════════════════════
-   ML TRAINING UI
+   HARD MODE BUTTON
 ══════════════════════════════════════════ */
-.menu-btn-ml::before { background: linear-gradient(180deg, #B89A30, var(--brass)); }
-.menu-btn-ml .menu-btn-ico { background: rgba(168,132,42,.10); color: var(--brass); font-size: 20px; }
-
+.menu-btn-hard::before {
+  background: linear-gradient(180deg, #8B2020, #6B1A1A);
+}
+.menu-btn-hard .menu-btn-ico {
+  background: rgba(139,32,32,.10); color: #C04040;
+}
 .ml-badge {
   display: inline-block;
-  background: var(--army);
-  color: var(--parchment);
   font-family: 'Cinzel', serif;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .1em;
-  padding: 1px 6px;
-  border-radius: 20px;
-  margin-left: 6px;
-  vertical-align: middle;
+  font-size: 9px; font-weight: 700; letter-spacing: .1em;
+  padding: 1px 6px; border-radius: 20px;
+  margin-left: 6px; vertical-align: middle;
 }
-
-#ml-panel {
-  position: fixed;
-  inset: 0;
-  background: rgba(26,22,16,.88);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 210;
-}
-#ml-panel[hidden] { display: none; }
-
-#ml-box {
-  background: var(--surface);
-  border: 2px solid var(--brass);
-  border-radius: 18px;
-  padding: 32px 28px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  text-align: center;
-  box-shadow:
-    0 0 0 1px var(--parchment-dk),
-    0 0 60px rgba(168,132,42,.15),
-    0 30px 80px rgba(0,0,0,.6);
-  width: min(340px, 90vw);
-}
-#ml-title {
-  font-family: 'Cinzel Decorative', serif;
-  font-size: 1.05em;
-  font-weight: 700;
-  color: var(--ink);
-}
-#ml-sub {
-  font-family: 'Cinzel', serif;
-  font-size: 10px;
-  letter-spacing: .14em;
-  color: var(--brass);
-  opacity: .85;
-}
-.ml-bar-bg {
-  width: 100%;
-  height: 10px;
-  background: var(--parchment-dk);
-  border-radius: 99px;
-  overflow: hidden;
-}
-.ml-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--army), #4A7A4C);
-  border-radius: 99px;
-  width: 0%;
-  transition: width .4s ease;
-}
-#ml-stat {
-  font-family: 'Noto Serif JP', serif;
-  font-size: 12px;
-  color: var(--ink-mid);
-}
-#ml-wr {
-  font-family: 'Cinzel', serif;
-  font-size: 11px;
-  color: var(--brass);
-  min-height: 1.4em;
-}
+.ml-badge-ready  { background: var(--army);  color: var(--parchment); }
+.ml-badge-nodata { background: #8B2020;      color: #F0E6CC; }
 </style>
 </head>
 <body>
@@ -1515,7 +1448,8 @@ body {
     <div class="sec-bar"></div><div class="sec-gem"></div>
   </div>
 
-  <button class="menu-btn menu-btn-cpu" onclick="startCPUMode()">
+  <!-- Normal Mode -->
+  <button class="menu-btn menu-btn-cpu" onclick="startCPUMode(false)">
     <div class="menu-btn-inner">
       <div class="menu-btn-ico">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
@@ -1525,21 +1459,22 @@ body {
         </svg>
       </div>
       <div class="menu-btn-txts">
-        <div class="menu-btn-ja">CPU と対戦する</div>
-        <div class="menu-btn-en">VS AUTOMATON</div>
+        <div class="menu-btn-ja">ノーマルモード</div>
+        <div class="menu-btn-en">VS AUTOMATON · NORMAL</div>
       </div>
       <svg class="menu-btn-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4L13 10L7 16"/></svg>
     </div>
   </button>
 
-  <button class="menu-btn menu-btn-ml" onclick="openMLPanel()">
+  <!-- Hard Mode (ML) -->
+  <button class="menu-btn menu-btn-hard" onclick="startHardMode()">
     <div class="menu-btn-inner">
       <div class="menu-btn-ico">🤖</div>
       <div class="menu-btn-txts">
-        <div class="menu-btn-ja">AIを機械学習で強化する
-          <span id="ml-badge" class="ml-badge" hidden>● ML</span>
+        <div class="menu-btn-ja">ハードモード
+          <span id="ml-badge" class="ml-badge ml-badge-nodata">● 未学習</span>
         </div>
-        <div class="menu-btn-en">REINFORCE · DOUBLE DQN</div>
+        <div class="menu-btn-en">VS AUTOMATON · HARD · ML</div>
       </div>
       <svg class="menu-btn-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4L13 10L7 16"/></svg>
     </div>
@@ -1781,20 +1716,6 @@ body {
   </div>
 </div>
 
-<!-- ML Training Panel -->
-<div id="ml-panel" hidden>
-  <div id="ml-box">
-    <div id="ml-title">⚔ AI 機械学習強化</div>
-    <div id="ml-sub">Double DQN 自己対戦 · 50,000 エピソード</div>
-    <div class="ml-bar-bg"><div id="ml-bar" class="ml-bar-fill"></div></div>
-    <div id="ml-stat">準備完了</div>
-    <div id="ml-wr"></div>
-    <div class="ov-btns">
-      <button id="ml-go-btn" onclick="mlToggleTraining()">学習開始</button>
-      <button onclick="closeMlPanel()">閉じる</button>
-    </div>
-  </div>
-</div>
 
 <script>
 'use strict';
@@ -1911,13 +1832,24 @@ function cleanupPeer() {
 }
 
 // ===== Menu actions =====
-function startCPUMode() {
+function startCPUMode(hard = false) {
   gameMode = 'cpu'; myRole = null;
-  document.getElementById('opp-label-chip').textContent = 'CPU';
+  document.getElementById('opp-label-chip').textContent = hard ? 'CPU (ML)' : 'CPU';
   document.getElementById('opp-hand-label').textContent = 'CPU の手札';
   document.getElementById('ov-btn').textContent = 'もう一度プレイ';
   showScreen('scr-game');
-  initGame();
+  initGame(hard);
+}
+
+function startHardMode() {
+  if (!mlTrained || !mlOnlineNet) {
+    const t = document.getElementById('menu-toast');
+    t.textContent = 'ML モデル未読み込み。./model/model.json を配置してください。';
+    t.hidden = false;
+    setTimeout(() => { t.hidden = true; }, 3500);
+    return;
+  }
+  startCPUMode(true);
 }
 
 function showJoinScreen() {
@@ -2259,7 +2191,7 @@ function cmpF(a, b) {
 }
 
 // ===== CPU Game init =====
-function initGame() {
+function initGame(hard = false) {
   sel = null;
   const d = shuf(mkDeck());
   G = {
@@ -2269,7 +2201,8 @@ function initGame() {
     flags: Array(9).fill(0).map(() => ({ p: [], a: [], w: null })),
     myTurn: true,
     over: false,
-    winner: null
+    winner: null,
+    hardMode: hard,
   };
   document.getElementById('overlay').classList.remove('on');
   render();
@@ -2695,11 +2628,11 @@ function simApply(base, card, fi) {
 function mctsAiTurn() {
   if (G.over) return;
 
-  // ── ML AI が訓練済みであれば優先使用 ──────────────────────────────────────
-  if (mlTrained && mlOnlineNet) {
+  // ── ハードモード: ML AI が訓練済みであれば優先使用 ───────────────────────────
+  if (G.hardMode && mlTrained && mlOnlineNet) {
     const obs  = mlEncodeState();
     const mask = mlEncodeMask();
-    const act  = mlAct(obs, mask, false);   // greedy (ε=0)
+    const act  = mlAct(obs, mask);   // greedy
     if (act !== null) {
       const {card, fi} = mlDecodeAction(act);
       if (card && G.flags[fi] && !G.flags[fi].w && G.flags[fi].a.length < 3) {
@@ -2839,222 +2772,16 @@ const ML_ACTS  = 540;  // 行動空間: cardInt(0-59)*9 + flagIdx(0-8)
 const ML_COLS  = ['red','blue','green','yellow','orange','purple'];
 function cardInt(c) { return ML_COLS.indexOf(c.c) * 10 + (c.v - 1); }
 
-/* ── 設定 ── */
-const ML_CFG = {
-  GAMMA: 0.99,
-  LR:    3e-4,
-  BATCH: 64,
-  EPS_START: 1.0,
-  EPS_END:   0.05,
-  EPS_STEPS: 40000,    // ε が最終値に達するステップ数
-  TGT_SYNC:  300,      // ターゲットネット同期頻度(学習ステップ)
-  BUF_CAP:   10000,    // リプレイバッファ容量
-  TRAIN_EP:  50000,    // 総学習エピソード数
-  CHUNK_EP:  15,       // setTimeout ごとのエピソード数
-  TRAIN_EVR: 3,        // N ステップに 1 回学習
-};
-
-/* ── SPEnv: 自己対戦用ゲーム環境 ── */
-class SPEnv {
-  reset() {
-    const d = Array.from({length: 60}, (_, i) => i);
-    for (let i = 59; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [d[i], d[j]] = [d[j], d[i]];
-    }
-    this.h    = [d.slice(0, 7), d.slice(7, 14)];
-    this.deck = d.slice(14);
-    this.fl   = Array.from({length: 9}, () => [[], []]);
-    this.ow   = new Array(9).fill(-1);   // -1=未決, 0=p0, 1=p1
-    this.cp   = 0;
-    this.done = false;
-    this.winner = -2;  // -2=継続
-    return this._obs(0);
-  }
-
-  _obs(pl) {
-    const o = new Float32Array(ML_STATE), op = 1 - pl;
-    let i = 0;
-    for (const c of this.h[pl]) o[c] = 1;
-    i += 60;
-    for (let f = 0; f < 9; f++) { for (const c of this.fl[f][pl]) o[i + c] = 1; i += 60; }
-    for (let f = 0; f < 9; f++) { for (const c of this.fl[f][op]) o[i + c] = 1; i += 60; }
-    for (let f = 0; f < 9; f++) {
-      const ow = this.ow[f];
-      if (ow === pl) o[i] = 1; else if (ow === op) o[i + 1] = 1;
-      i += 2;
-    }
-    o[i] = this.deck.length / 46;
-    return o;
-  }
-
-  _mask(pl) {
-    const m = new Float32Array(ML_ACTS);
-    for (const c of this.h[pl])
-      for (let f = 0; f < 9; f++)
-        if (this.ow[f] === -1 && this.fl[f][pl].length < 3) m[c * 9 + f] = 1;
-    return m;
-  }
-
-  _randAct(pl) {
-    const acts = [];
-    for (const c of this.h[pl])
-      for (let f = 0; f < 9; f++)
-        if (this.ow[f] === -1 && this.fl[f][pl].length < 3) acts.push(c * 9 + f);
-    return acts.length ? acts[Math.floor(Math.random() * acts.length)] : null;
-  }
-
-  _evForm(cards) {
-    if (cards.length !== 3) return null;
-    const cs = cards.map(c => c / 10 | 0);
-    const vs = cards.map(c => (c % 10) + 1).sort((a, b) => a - b);
-    const sc = cs[0] === cs[1] && cs[1] === cs[2];
-    const st = vs[1] === vs[0] + 1 && vs[2] === vs[1] + 1;
-    const sv = vs[0] === vs[1] && vs[1] === vs[2];
-    const sum = vs[0] + vs[1] + vs[2];
-    if (sc && st) return [5, sum];
-    if (sv)       return [4, sum];
-    if (sc)       return [3, sum];
-    if (st)       return [2, sum];
-    return [1, sum];
-  }
-
-  _cmp(f1, f2) {
-    if (!f1 || !f2) return 0;
-    if (f1[0] !== f2[0]) return f1[0] > f2[0] ? 1 : -1;
-    if (f1[1] !== f2[1]) return f1[1] > f2[1] ? 1 : -1;
-    return 0;
-  }
-
-  step(act) {
-    const pl = this.cp;
-    const cid = act / 9 | 0, fi = act % 9;
-    const hi = this.h[pl].indexOf(cid);
-    if (hi === -1 || this.ow[fi] !== -1 || this.fl[fi][pl].length >= 3)
-      return { r: -1, done: false, obs: this._obs(1 - pl) };
-
-    this.h[pl].splice(hi, 1);
-    this.fl[fi][pl].push(cid);
-    if (this.deck.length) this.h[pl].push(this.deck.pop());
-
-    let r = this._resolve(pl);
-    const gw = this._gwin();
-    if (gw !== null) {
-      this.done = true; this.winner = gw;
-      if (gw === pl) r += 1; else if (gw !== -1) r -= 1;
-    }
-    this.cp = 1 - pl;
-    return { r, done: this.done, obs: this._obs(this.cp) };
-  }
-
-  _resolve(lp) {
-    let r = 0;
-    for (let f = 0; f < 9; f++) {
-      if (this.ow[f] !== -1) continue;
-      if (this.fl[f][0].length === 3 && this.fl[f][1].length === 3) {
-        const cmp = this._cmp(this._evForm(this.fl[f][0]), this._evForm(this.fl[f][1]));
-        const w = cmp > 0 ? 0 : (cmp < 0 ? 1 : lp);
-        this.ow[f] = w;
-        r += w === lp ? 0.3 : -0.3;
-      }
-    }
-    return r;
-  }
-
-  _gwin() {
-    const ow = this.ow;
-    const p0 = ow.filter(x => x === 0).length;
-    const p1 = ow.filter(x => x === 1).length;
-    if (p0 >= 5) return 0;
-    if (p1 >= 5) return 1;
-    for (let i = 0; i <= 6; i++) {
-      if (ow[i] === 0 && ow[i+1] === 0 && ow[i+2] === 0) return 0;
-      if (ow[i] === 1 && ow[i+1] === 1 && ow[i+2] === 1) return 1;
-    }
-    if (ow.every((o, f) => o !== -1 || this.fl[f][0].length >= 3) &&
-        ow.every((o, f) => o !== -1 || this.fl[f][1].length >= 3))
-      return p0 > p1 ? 0 : (p1 > p0 ? 1 : -1);
-    return null;
-  }
-}
-
-/* ── RBuffer: リプレイバッファ ── */
-class RBuffer {
-  constructor(cap = ML_CFG.BUF_CAP) {
-    this.cap = cap;
-    this.buf = [];
-    this.ptr = 0;
-  }
-  get size() { return this.buf.length; }
-
-  push(s, a, r, ns, done, nm) {
-    const e = {
-      s:  new Float32Array(s),
-      ns: new Float32Array(ns),
-      nm: new Float32Array(nm),
-      a, r, done,
-    };
-    if (this.buf.length < this.cap) { this.buf.push(e); }
-    else { this.buf[this.ptr] = e; this.ptr = (this.ptr + 1) % this.cap; }
-  }
-
-  sample(n) {
-    const L  = this.buf.length;
-    const idx = Array.from({length: n}, () => Math.floor(Math.random() * L));
-    const b   = idx.map(i => this.buf[i]);
-    const flatS  = new Float32Array(n * ML_STATE);
-    const flatNS = new Float32Array(n * ML_STATE);
-    const flatNM = new Float32Array(n * ML_ACTS);
-    b.forEach((x, i) => {
-      flatS.set(x.s,  i * ML_STATE);
-      flatNS.set(x.ns, i * ML_STATE);
-      flatNM.set(x.nm, i * ML_ACTS);
-    });
-    return {
-      s:  flatS, ns: flatNS, nm: flatNM,
-      a:  new Int32Array(b.map(x => x.a)),
-      r:  new Float32Array(b.map(x => x.r)),
-      d:  new Float32Array(b.map(x => x.done)),
-    };
-  }
-}
 
 /* ── ML エージェント変数 ── */
 let mlOnlineNet = null;
-let mlTargetNet = null;
-let mlOptimizer = null;
-let mlBuffer    = null;
-let mlSteps     = 0;
-let mlEpisodes  = 0;
 let mlTrained   = false;
-let _mlTraining = false;
 
-/* ── ネット構築 ── */
-function mlBuildNet() {
-  return tf.sequential({ layers: [
-    tf.layers.dense({ inputShape: [ML_STATE], units: 256, activation: 'relu',
-                      kernelInitializer: 'heNormal' }),
-    tf.layers.dense({ units: 128, activation: 'relu', kernelInitializer: 'heNormal' }),
-    tf.layers.dense({ units: ML_ACTS, kernelInitializer: 'glorotUniform' }),
-  ]});
-}
-
-function mlSyncTarget() {
-  mlTargetNet.setWeights(mlOnlineNet.getWeights());
-}
-
-/* ── ε-greedy + マスキング行動選択 ── */
-function mlEpsilon() {
-  return Math.max(ML_CFG.EPS_END,
-    ML_CFG.EPS_START - (ML_CFG.EPS_START - ML_CFG.EPS_END) * mlSteps / ML_CFG.EPS_STEPS);
-}
-
-function mlAct(obs, mask, explore = true) {
+/* ── greedy 行動選択 (マスキング付き) ── */
+function mlAct(obs, mask) {
   const valid = [];
   for (let i = 0; i < ML_ACTS; i++) if (mask[i] > 0) valid.push(i);
   if (!valid.length) return null;
-  if (explore && Math.random() < mlEpsilon())
-    return valid[Math.floor(Math.random() * valid.length)];
 
   const t = tf.tidy(() => {
     const s  = tf.tensor2d(obs, [1, ML_STATE]);
@@ -3065,45 +2792,6 @@ function mlAct(obs, mask, explore = true) {
   const act = t.dataSync()[0];
   t.dispose();
   return act;
-}
-
-/* ── Double DQN 学習ステップ ── */
-function mlTrainStep() {
-  if (mlBuffer.size < ML_CFG.BATCH) return;
-
-  const b  = mlBuffer.sample(ML_CFG.BATCH);
-  const S  = tf.tensor2d(b.s,  [ML_CFG.BATCH, ML_STATE]);
-  const NS = tf.tensor2d(b.ns, [ML_CFG.BATCH, ML_STATE]);
-  const NM = tf.tensor2d(b.nm, [ML_CFG.BATCH, ML_ACTS]);
-  const A  = tf.tensor1d(b.a, 'int32');
-  const R  = tf.tensor1d(b.r);
-  const D  = tf.tensor1d(b.d);
-
-  // Double DQN ターゲット (勾配なし)
-  const tgt = tf.tidy(() => {
-    const qnOnline  = mlOnlineNet.predict(NS);
-    const maskedQN  = qnOnline.add(NM.sub(1).mul(1e9));
-    const bestA     = maskedQN.argMax(1);
-    const qnTarget  = mlTargetNet.predict(NS);
-    const bestQ     = qnTarget.mul(tf.oneHot(bestA, ML_ACTS).cast('float32')).sum(1);
-    return R.add(tf.scalar(ML_CFG.GAMMA).mul(bestQ).mul(tf.scalar(1).sub(D)));
-  });
-
-  // 勾配更新
-  const cost = mlOptimizer.minimize(() => tf.tidy(() => {
-    const qPred  = mlOnlineNet.predict(S);
-    const qTaken = qPred.mul(tf.oneHot(A, ML_ACTS).cast('float32')).sum(1);
-    const diff   = tgt.sub(qTaken);
-    return tf.where(diff.abs().less(1),
-      diff.square().mul(0.5),
-      diff.abs().sub(0.5)
-    ).mean();
-  }), true);
-
-  tf.dispose([S, NS, NM, A, R, D, tgt, cost]);
-
-  mlSteps++;
-  if (mlSteps % ML_CFG.TGT_SYNC === 0) mlSyncTarget();
 }
 
 /* ── 実ゲーム状態のエンコード ── */
@@ -3142,172 +2830,36 @@ function mlDecodeAction(act) {
   return { card, fi };
 }
 
-/* ── 訓練ループ ── */
-async function mlStartTraining(total, onProgress) {
-  if (_mlTraining) return;
-  _mlTraining = true;
-
-  if (!mlOnlineNet) {
-    mlOnlineNet = mlBuildNet();
-    mlTargetNet = mlBuildNet();
-    mlSyncTarget();
-    mlOptimizer = tf.train.adam(ML_CFG.LR);
-    mlBuffer    = new RBuffer();
-    mlSteps     = 0;
-    mlEpisodes  = 0;
-  }
-
-  const env      = new SPEnv();
-  const recentW  = new Array(500).fill(0);
-  const startEp  = mlEpisodes;
-  const targetEp = total;
-
-  const runChunk = async () => {
-    if (!_mlTraining) return;
-
-    for (let ci = 0; ci < ML_CFG.CHUNK_EP; ci++) {
-      if (mlEpisodes >= targetEp) break;
-
-      env.reset();
-      let obs0 = env._obs(0);
-      const selfplay = mlEpisodes >= startEp + (targetEp - startEp) * 0.5;
-
-      for (let step = 0; step < 120; step++) {
-        if (env.done || env.cp !== 0) break;
-
-        const mask0 = env._mask(0);
-        if (!mask0.some(x => x > 0)) { env.done = true; break; }
-
-        const act0 = mlAct(obs0, mask0, true);
-        const { r: r0, done: d0 } = env.step(act0);
-
-        if (d0) {
-          const nobs = env._obs(0), nmask = new Float32Array(ML_ACTS);
-          mlBuffer.push(obs0, act0, r0, nobs, 1.0, nmask);
-          if (mlSteps % ML_CFG.TRAIN_EVR === 0) mlTrainStep();
-          break;
-        }
-
-        // 相手の手番
-        const act1 = selfplay
-          ? mlAct(env._obs(1), env._mask(1), false)
-          : env._randAct(1);
-        if (act1 === null) break;
-        const { r: r1, done: d1 } = env.step(act1);
-
-        const combined = r0 - r1;
-        const nobs0  = env._obs(0);
-        const nmask0 = d1 ? new Float32Array(ML_ACTS) : env._mask(0);
-        mlBuffer.push(obs0, act0, combined, nobs0, d1 ? 1.0 : 0.0, nmask0);
-        obs0 = nobs0;
-
-        if (mlSteps % ML_CFG.TRAIN_EVR === 0) mlTrainStep();
-        if (d1) break;
-      }
-
-      recentW[mlEpisodes % 500] = env.winner === 0 ? 1 : 0;
-      mlEpisodes++;
-    }
-
-    const n  = Math.min(mlEpisodes, 500);
-    const wr = recentW.slice(0, n).reduce((a, b) => a + b, 0) / n;
-    onProgress && onProgress({
-      ep: mlEpisodes, total: targetEp, wr,
-      eps: mlEpsilon(), done: mlEpisodes >= targetEp,
-    });
-
-    if (mlEpisodes >= targetEp) {
-      _mlTraining = false;
-      mlTrained   = true;
-      updateMLBadge();
-      // IndexedDB に保存
-      try {
-        await mlOnlineNet.save('indexeddb://battle-line-dqn-online');
-        await mlTargetNet.save('indexeddb://battle-line-dqn-target');
-        console.log('[ML] モデルを IndexedDB に保存しました');
-      } catch (e) { console.warn('[ML] 保存失敗:', e); }
-      return;
-    }
-
-    setTimeout(runChunk, 0);
-  };
-
-  setTimeout(runChunk, 0);
-}
-
-function mlStopTraining() { _mlTraining = false; }
-
-/* ── 起動時: IndexedDB からロード ── */
+/* ── 起動時: モデルロード (./model/model.json → IndexedDB フォールバック) ── */
 async function mlInitialize() {
   try {
-    mlOnlineNet = await tf.loadLayersModel('indexeddb://battle-line-dqn-online');
-    mlTargetNet = await tf.loadLayersModel('indexeddb://battle-line-dqn-target');
-    mlOptimizer = tf.train.adam(ML_CFG.LR);
-    mlBuffer    = new RBuffer();
+    mlOnlineNet = await tf.loadLayersModel('./model/model.json');
     mlTrained   = true;
     updateMLBadge();
-    console.log('[ML] 学習済みモデルをロードしました');
-  } catch (e) {
-    console.log('[ML] 保存済みモデルなし。メニューから学習を開始してください');
+    console.log('[ML] ./model/model.json を読み込みました');
+    return;
+  } catch(e) {}
+  try {
+    mlOnlineNet = await tf.loadLayersModel('indexeddb://battle-line-dqn-online');
+    mlTrained   = true;
+    updateMLBadge();
+    console.log('[ML] IndexedDB からモデルを読み込みました');
+  } catch(e) {
+    console.log('[ML] モデル未読み込み — ハードモードは使用不可');
   }
 }
 
 /* ── UI 関数 ── */
 function updateMLBadge() {
   const b = document.getElementById('ml-badge');
-  if (b) b.hidden = !mlTrained;
-}
-
-function openMLPanel() {
-  document.getElementById('ml-panel').hidden = false;
-  // 既存進捗を反映
-  if (mlEpisodes > 0) {
-    const pct = Math.min(100, mlEpisodes / ML_CFG.TRAIN_EP * 100);
-    document.getElementById('ml-bar').style.width = pct + '%';
-  }
+  if (!b) return;
   if (mlTrained) {
-    document.getElementById('ml-stat').textContent = '✓ 学習済みモデルが読み込まれています';
-    document.getElementById('ml-go-btn').textContent = '再学習';
+    b.textContent = '● READY';
+    b.className   = 'ml-badge ml-badge-ready';
+  } else {
+    b.textContent = '● 未学習';
+    b.className   = 'ml-badge ml-badge-nodata';
   }
-}
-
-function closeMlPanel() {
-  mlStopTraining();
-  document.getElementById('ml-panel').hidden = true;
-}
-
-function mlToggleTraining() {
-  const btn = document.getElementById('ml-go-btn');
-  if (_mlTraining) {
-    mlStopTraining();
-    btn.textContent = '学習再開';
-    return;
-  }
-
-  const remaining = ML_CFG.TRAIN_EP - mlEpisodes;
-  if (remaining <= 0) {
-    // 再学習: リセット
-    if (mlOnlineNet) { mlOnlineNet.dispose(); mlTargetNet.dispose(); }
-    mlOnlineNet = null; mlTrained = false; mlEpisodes = 0; mlSteps = 0;
-    updateMLBadge();
-  }
-
-  const total = mlEpisodes + Math.max(remaining, ML_CFG.TRAIN_EP);
-  btn.textContent = '停止';
-
-  mlStartTraining(total, ({ ep, total: tot, wr, eps, done }) => {
-    const pct = Math.min(100, ep / ML_CFG.TRAIN_EP * 100);
-    document.getElementById('ml-bar').style.width   = pct + '%';
-    document.getElementById('ml-stat').textContent  =
-      `エピソード ${ep.toLocaleString()} / ${ML_CFG.TRAIN_EP.toLocaleString()}   ε=${eps.toFixed(3)}`;
-    document.getElementById('ml-wr').textContent    =
-      `直近 500 試合 勝率: ${(wr * 100).toFixed(1)} %`;
-    if (done) {
-      btn.textContent = '学習完了 ✓';
-      btn.disabled = true;
-      document.getElementById('ml-stat').textContent = '✓ 保存しました — CPU対戦で ML AI を使用します';
-    }
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
