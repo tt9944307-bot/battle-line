@@ -2838,7 +2838,7 @@ async function mlInitialize() {
     updateMLBadge();
     console.log('[ML] ./model/model.json を読み込みました');
     return;
-  } catch(e) {}
+  } catch(e) { console.error('[ML] model.json エラー:', e.message || e); }
   try {
     mlOnlineNet = await tf.loadLayersModel('indexeddb://battle-line-dqn-online');
     mlTrained   = true;
