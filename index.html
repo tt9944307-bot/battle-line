@@ -2833,10 +2833,31 @@ function mlDecodeAction(act) {
 /* ── 起動時: モデルロード (./model/model.json → IndexedDB フォールバック) ── */
 async function mlInitialize() {
   try {
-    mlOnlineNet = await tf.loadLayersModel('./model/model.json');
+    // Keras 3.x → TF.js 4.x 互換パッチを当ててからロード
+    const [jRes, bRes] = await Promise.all([
+      fetch('./model/model.json'),
+      fetch('./model/group1-shard1of1.bin'),
+    ]);
+    const topology = await jRes.json();
+    const weights  = await bRes.arrayBuffer();
+
+    // InputLayer: batch_shape → batchInputShape
+    // Dense dtype: DTypePolicy dict → "float32"
+    const cfgLayers = topology.modelTopology.model_config.config.layers;
+    for (const l of cfgLayers) {
+      const c = l.config;
+      if ('batch_shape' in c)           { c.batchInputShape = c.batch_shape; delete c.batch_shape; }
+      if (c.dtype && typeof c.dtype === 'object') { c.dtype = 'float32'; }
+    }
+    topology.generatedBy = 'keras v2.15.0';
+    topology.modelTopology.keras_version = '2.15.0';
+
+    const jFile = new File([JSON.stringify(topology)], 'model.json', {type:'application/json'});
+    const bFile = new File([weights], 'group1-shard1of1.bin');
+    mlOnlineNet = await tf.loadLayersModel(tf.io.browserFiles([jFile, bFile]));
     mlTrained   = true;
     updateMLBadge();
-    console.log('[ML] ./model/model.json を読み込みました');
+    console.log('[ML] model.json 読み込み完了 (互換パッチ済)');
     return;
   } catch(e) { console.error('[ML] model.json エラー:', e.message || e); }
   try {
