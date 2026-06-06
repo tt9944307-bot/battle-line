@@ -2853,8 +2853,13 @@ async function mlInitialize() {
     topology.generatedBy = 'keras v2.15.0';
     topology.modelTopology.keras_version = '2.15.0';
     // (3) weightsManifest: "ModelName/LayerName/var" → "LayerName/var"
+    //     モデル名プレフィックスがある場合のみ除去（二重除去を防ぐ）
+    const modelName = topology.modelTopology.model_config.config.name;
     for (const entry of topology.weightsManifest) {
-      entry.weights = entry.weights.map(w => ({ ...w, name: w.name.replace(/^[^\/]+\//, '') }));
+      entry.weights = entry.weights.map(w => ({
+        ...w,
+        name: w.name.startsWith(modelName + '/') ? w.name.slice(modelName.length + 1) : w.name
+      }));
     }
 
     const jFile = new File([JSON.stringify(topology)], 'model.json', {type:'application/json'});
