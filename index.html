@@ -1315,15 +1315,6 @@ body {
 .menu-btn-hard .menu-btn-ico {
   background: rgba(139,32,32,.10); color: #C04040;
 }
-.ml-badge {
-  display: inline-block;
-  font-family: 'Cinzel', serif;
-  font-size: 9px; font-weight: 700; letter-spacing: .1em;
-  padding: 1px 6px; border-radius: 20px;
-  margin-left: 6px; vertical-align: middle;
-}
-.ml-badge-ready  { background: var(--army);  color: var(--parchment); }
-.ml-badge-nodata { background: #8B2020;      color: #F0E6CC; }
 
 /* ══════════════════════════════════════════════════════
    ACCESSIBILITY ─ 視認性向上（50代以上向け）
@@ -1354,7 +1345,6 @@ html { font-size: 112%; }
 .menu-btn-chev    { width: 22px; height: 22px; }
 .menu-btn         { margin-top: 11px; }
 .rules-btn        { font-size: 12px; padding: 7px 14px; }
-.ml-badge         { font-size: 11px; padding: 2px 8px; }
 
 /* ── プロフィール / ロビー ──────────────────────────── */
 .cmd-name         { font-size: 21px; }
@@ -1566,11 +1556,29 @@ html { font-size: 112%; }
   <!-- Hard Mode (ML) -->
   <button class="menu-btn menu-btn-hard" onclick="startHardMode()">
     <div class="menu-btn-inner">
-      <div class="menu-btn-ico">🤖</div>
+      <div class="menu-btn-ico">
+        <!-- ターゲットスコープ + ニューラルノード -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <!-- 外リング -->
+          <circle cx="12" cy="12" r="8" stroke-width="1.3"/>
+          <!-- クロスヘア（リングを突き抜ける） -->
+          <line x1="12" y1="1.5" x2="12" y2="6.4"  stroke-width="1.3"/>
+          <line x1="12" y1="17.6" x2="12" y2="22.5" stroke-width="1.3"/>
+          <line x1="1.5" y1="12" x2="6.4"  y2="12"  stroke-width="1.3"/>
+          <line x1="17.6" y1="12" x2="22.5" y2="12" stroke-width="1.3"/>
+          <!-- 内リング -->
+          <circle cx="12" cy="12" r="3.8" stroke-width="1.15"/>
+          <!-- 45° 小刻み（技術感） -->
+          <line x1="6.1" y1="6.1"  x2="7.5"  y2="7.5"  stroke-width="1.05" opacity=".55"/>
+          <line x1="17.9" y1="6.1" x2="16.5" y2="7.5"  stroke-width="1.05" opacity=".55"/>
+          <line x1="6.1" y1="17.9" x2="7.5"  y2="16.5" stroke-width="1.05" opacity=".55"/>
+          <line x1="17.9" y1="17.9" x2="16.5" y2="16.5" stroke-width="1.05" opacity=".55"/>
+          <!-- 中心ドット -->
+          <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
       <div class="menu-btn-txts">
-        <div class="menu-btn-ja">ハードモード
-          <span id="ml-badge" class="ml-badge ml-badge-nodata">● 未学習</span>
-        </div>
+        <div class="menu-btn-ja">ハードモード</div>
         <div class="menu-btn-en">VS AUTOMATON · HARD · ML</div>
       </div>
       <svg class="menu-btn-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4L13 10L7 16"/></svg>
@@ -2955,17 +2963,7 @@ async function mlInitialize() {
 }
 
 /* ── UI 関数 ── */
-function updateMLBadge() {
-  const b = document.getElementById('ml-badge');
-  if (!b) return;
-  if (mlTrained) {
-    b.textContent = '● READY';
-    b.className   = 'ml-badge ml-badge-ready';
-  } else {
-    b.textContent = '● 未学習';
-    b.className   = 'ml-badge ml-badge-nodata';
-  }
-}
+function updateMLBadge() { /* badge removed */ }
 
 // ═══════════════════════════════════════════════════════════════════════════
 
