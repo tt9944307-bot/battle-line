@@ -1324,6 +1324,103 @@ body {
 }
 .ml-badge-ready  { background: var(--army);  color: var(--parchment); }
 .ml-badge-nodata { background: #8B2020;      color: #F0E6CC; }
+
+/* ══════════════════════════════════════════════════════
+   ACCESSIBILITY ─ 視認性向上（50代以上向け）
+   ・ベースフォントを 12% 拡大（em 系が全体的に追従）
+   ・極小テキスト（9〜11px）を 12px 以上に統一
+   ・カード・フラグを一回り大きく（PC/タブレット幅のみ）
+   ・ボタン・タップ領域を広げる
+══════════════════════════════════════════════════════ */
+
+/* ── ベースフォントスケール ──────────────────────────── */
+html { font-size: 112%; }
+
+/* ── 極小テキスト全般 ──────────────────────────────── */
+.logo-eyebrow   { font-size: 12px; }
+.logo-jp        { font-size: 13px; }
+.sec-txt        { font-size: 11px; }
+.footer-note    { font-size: 11px; }
+.cmd-rank       { font-size: 12px; }
+.rec-l          { font-size: 11px; }
+
+/* ── メニュー画面 ──────────────────────────────────── */
+.logo-title       { font-size: 34px; }
+.menu-btn-ja      { font-size: 16.5px; }
+.menu-btn-en      { font-size: 11px; }
+.menu-btn-inner   { padding: 16px 16px 16px 22px; gap: 16px; }
+.menu-btn-ico     { width: 48px; height: 48px; }
+.menu-btn-ico svg { width: 26px; height: 26px; }
+.menu-btn-chev    { width: 22px; height: 22px; }
+.menu-btn         { margin-top: 11px; }
+.rules-btn        { font-size: 12px; padding: 7px 14px; }
+.ml-badge         { font-size: 11px; padding: 2px 8px; }
+
+/* ── プロフィール / ロビー ──────────────────────────── */
+.cmd-name         { font-size: 21px; }
+.rec-n            { font-size: 15px; }
+.profile-logo-jp  { font-size: 13px; }
+.profile-title    { font-size: 15px; }
+.profile-sub      { font-size: 14px; }
+.profile-note     { font-size: 12px; }
+.lobby-title      { font-size: 18px; }
+.lobby-sub        { font-size: 15px; }
+.lobby-warn       { font-size: 15px; }
+.btn-start        { font-size: 0.95em; padding: 16px 0; }
+.btn-ren          { font-size: 11px; padding: 7px 14px; }
+.btn-sm           { font-size: 0.88em; padding: 10px 22px; }
+
+/* ── ゲーム画面：情報バー ───────────────────────────── */
+.hand-label { font-size: 13px; margin-bottom: 5px; }
+.chip       { font-size: 0.9em;  padding: 5px 13px; }
+#msg        { font-size: 0.9em; }
+.exit-btn   { font-size: 0.85em; padding: 5px 13px; }
+#help-bar   { font-size: 0.86em; }
+
+/* ── ゲーム画面：カード・フラグ（PC / タブレット幅のみ） */
+@media (min-width: 481px) {
+  /* 手札カード：一回り大きく */
+  .card.hc     { width: 62px; height: 90px; }
+  .card.hc .cv { font-size: 1.85em; }
+  .card.hc .cs { font-size: 0.52em; }
+
+  /* フラグ上のカード */
+  .card        { height: 58px; }
+  .slot        { height: 58px; }
+  .cv          { font-size: 1.35em; }
+  .cs          { font-size: 0.48em; letter-spacing: .04em; }
+
+  /* カード裏面 */
+  .card-back         { width: 35px; height: 52px; }
+  .card-back::after  { font-size: 11px; }
+
+  /* フラグマーカー */
+  .fmark  { width: 52px; height: 38px; }
+  .flbl   { font-size: 0.68em; }
+  .fnum   { font-size: 0.56em; }
+
+  /* 要素間の間隔を少し広げる */
+  #flags-row   { gap: 7px; }
+  .fcol        { gap: 3px; }
+  .form-block  { gap: 3px; }
+  #player-hand { gap: 6px; min-height: 90px; }
+  #ai-hand     { gap: 4px; }
+}
+
+/* ── ゲームオーバー画面 ────────────────────────────── */
+#ov-msg      { font-size: 1.4em; }
+#ov-btn      { font-size: 0.94em; padding: 14px 38px; }
+#ov-view-btn { font-size: 0.94em; padding: 13px 26px; }
+
+/* ── ルール表示 ────────────────────────────────────── */
+#rules-box h2 { font-size: 1.2em; }
+#rules-box h3 { font-size: 0.93em; }
+.rule-list    { font-size: 0.9em; }
+.rule-note    { font-size: 0.88em; }
+.rule-card    { font-size: 0.9em; }
+.ft-row       { font-size: 0.9em; }
+.ft-rank, .ft-name { font-size: 0.93em; }
+.rules-close  { width: 32px; height: 32px; }
 </style>
 </head>
 <body>
