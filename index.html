@@ -2646,6 +2646,14 @@ function mctsAiTurn() {
   const avail = G.flags.map((f,i) => ({f,i})).filter(({f}) => !f.w && f.a.length < 3);
   if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
 
+  // ── 難易度調整: 50%の確率でランダムに指す ────────────────────────────────
+  if (Math.random() < 0.5) {
+    const {i: _ri} = avail[Math.floor(Math.random() * avail.length)];
+    const _rc = G.ah[Math.floor(Math.random() * G.ah.length)];
+    scheduleAIMove(_rc, _ri);
+    return;
+  }
+
   // ── 安全策: ウェッジを即完成できるなら必ず取る（相手の確定役に負けない限り）
   for (const card of G.ah) {
     for (const {f,i} of avail) {
