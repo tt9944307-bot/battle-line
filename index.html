@@ -1947,14 +1947,7 @@ function startCPUMode(hard = false) {
 }
 
 function startHardMode() {
-  if (!mlTrained || !mlOnlineNet) {
-    const t = document.getElementById('menu-toast');
-    t.textContent = 'ML モデル未読み込み。./model/model.json を配置してください。';
-    t.hidden = false;
-    setTimeout(() => { t.hidden = true; }, 3500);
-    return;
-  }
-  startCPUMode(true);
+  startCPUMode(true);   // ハード = フル強度ヒューリスティック（モデル不要・常時可）
 }
 
 function showJoinScreen() {
@@ -2733,26 +2726,13 @@ function simApply(base, card, fi) {
 function mctsAiTurn() {
   if (G.over) return;
 
-  // ── ハードモード: ML AI が訓練済みであれば優先使用 ───────────────────────────
-  if (G.hardMode && mlTrained && mlOnlineNet) {
-    const obs  = mlEncodeState();
-    const mask = mlEncodeMask();
-    const act  = mlAct(obs, mask);   // greedy
-    if (act !== null) {
-      const {card, fi} = mlDecodeAction(act);
-      if (card && G.flags[fi] && !G.flags[fi].w && G.flags[fi].a.length < 3) {
-        scheduleAIMove(card, fi);
-        return;
-      }
-    }
-  }
-
-  // ── フォールバック: ヒューリスティック AI ────────────────────────────────
+  // ── 着手候補 ──────────────────────────────────────────────────────────
   const avail = G.flags.map((f,i) => ({f,i})).filter(({f}) => !f.w && f.a.length < 3);
   if (!avail.length || !G.ah.length) { G.myTurn = true; render(); return; }
 
-  // ── 難易度調整: 50%の確率でランダムに指す ────────────────────────────────
-  if (Math.random() < 0.5) {
+  // ── 難易度: ノーマルのみ 50%でランダム。ハードはこのブロックを飛ばし
+  //    フル強度（ウェッジ安全策＋1手読み静的評価）で着手する ────────────────
+  if (!G.hardMode && Math.random() < 0.5) {
     const {i: _ri} = avail[Math.floor(Math.random() * avail.length)];
     const _rc = G.ah[Math.floor(Math.random() * G.ah.length)];
     scheduleAIMove(_rc, _ri);
